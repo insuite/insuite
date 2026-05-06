@@ -1,0 +1,153 @@
+:root {
+  --bg: #0f0e0c;
+  --bg-card: #141210;
+  --border: #2a2520;
+  --text: #f0ece4;
+  --text-secondary: #e8d8a8;
+  --text-muted: #7a7060;
+  --text-faint: #5a5040;
+  --gold: #c9b98a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text-muted);
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--gold);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 24px 96px;
+}
+
+.brand {
+  font-family: Georgia, serif;
+  font-weight: 700;
+  font-size: 28px;
+  letter-spacing: 4px;
+  color: var(--gold);
+  text-align: center;
+  margin: 0 0 8px;
+}
+
+.tagline {
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-faint);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin: 0 0 64px;
+}
+
+h1 {
+  font-family: Georgia, serif;
+  font-weight: 400;
+  font-size: 32px;
+  color: var(--text);
+  margin: 0 0 8px;
+  letter-spacing: 0.5px;
+}
+
+h2 {
+  font-family: Georgia, serif;
+  font-weight: 400;
+  font-size: 22px;
+  color: var(--text);
+  margin: 48px 0 12px;
+}
+
+h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 24px 0 8px;
+}
+
+.effective {
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  margin: 0 0 32px;
+}
+
+p, ul {
+  margin: 0 0 12px;
+}
+
+ul {
+  padding-left: 22px;
+}
+
+li {
+  margin-bottom: 6px;
+}
+
+li::marker {
+  color: var(--gold);
+}
+
+strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 32px 0;
+}
+
+.nav {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  margin-top: 32px;
+  flex-wrap: wrap;
+}
+
+.nav a {
+  font-size: 14px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.back {
+  display: inline-block;
+  margin-bottom: 32px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.back:hover {
+  color: var(--gold);
+}
+
+.footer {
+  margin-top: 96px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-faint);
+  text-align: center;
+  letter-spacing: 0.5px;
+}

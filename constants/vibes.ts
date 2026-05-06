@@ -1,0 +1,15 @@
+export const vibeTags: string[] = [
+  'Quiet',
+  'Social',
+  'Business traveller',
+  'Leisure',
+  'Foodie',
+  'Early riser',
+  'Night owl',
+  'Gym regular',
+  'Coffee person',
+  'Wine person',
+  'Tea person',
+  'Reader',
+  'Conference-goer',
+];

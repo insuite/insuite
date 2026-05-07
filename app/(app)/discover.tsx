@@ -479,17 +479,17 @@ const styles = StyleSheet.create({
   },
   filterScroll: {
     flexGrow: 0,
-    height: 64,
+    height: 60,
+    marginBottom: spacing.md,
   },
   filterRow: {
     gap: spacing.sm,
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.md,
     alignItems: 'center',
   },
   filterChip: {
-    height: 44,
-    paddingHorizontal: 18,
+    height: 38,
+    paddingHorizontal: 16,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.border.default,

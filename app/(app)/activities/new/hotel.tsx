@@ -434,8 +434,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cityChip: {
-    height: 44,
-    paddingHorizontal: 18,
+    height: 38,
+    paddingHorizontal: 16,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.border.default,

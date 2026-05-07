@@ -11,6 +11,47 @@ import type { ActivityDraft } from '@/stores/activityDraftStore';
 
 import { isSupabaseConfigured, supabase } from './supabase';
 
+export interface HotelRequestInput {
+  name: string;
+  city: string;
+  country: string;
+  notes?: string;
+}
+
+/**
+ * Submit a "please add this hotel" request. The owner reviews these in the
+ * Supabase dashboard and copies approved entries into the `hotels` table.
+ * Throws on failure so the caller can surface it.
+ */
+export async function submitHotelRequest(input: HotelRequestInput): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    // Demo mode: nothing to write to. Don't error — just no-op.
+    return;
+  }
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData.user?.id;
+  if (!userId) throw new Error('Not signed in');
+
+  const trimmed = {
+    name: input.name.trim(),
+    city: input.city.trim(),
+    country: input.country.trim(),
+    notes: input.notes?.trim() || null,
+  };
+  if (!trimmed.name || !trimmed.city || !trimmed.country) {
+    throw new Error('Hotel name, city, and country are required.');
+  }
+
+  const { error } = await supabase.from('hotel_requests').insert({
+    requester_id: userId,
+    name: trimmed.name,
+    city: trimmed.city,
+    country: trimmed.country,
+    notes: trimmed.notes,
+  });
+  if (error) throw error;
+}
+
 /**
  * Fetch the hotels catalog from Supabase. Falls back to the bundled static list
  * in demo mode (no Supabase) or on network failure so Step 1 of activity

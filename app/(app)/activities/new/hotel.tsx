@@ -3,8 +3,12 @@ import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -15,7 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, radius, spacing, typography } from '@/constants/colors';
 import type { Hotel } from '@/constants/hotels';
-import { listHotels } from '@/lib/activitiesApi';
+import { listHotels, submitHotelRequest } from '@/lib/activitiesApi';
 import { activityDraft, useActivityDraft } from '@/stores/activityDraftStore';
 
 export default function HotelStep() {
@@ -24,6 +28,7 @@ export default function HotelStep() {
   const [query, setQuery] = useState('');
   const [hotels, setHotels] = useState<Hotel[]>([]);
   const [loading, setLoading] = useState(true);
+  const [requestOpen, setRequestOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -133,15 +138,174 @@ export default function HotelStep() {
               <Text style={styles.emptyText}>
                 {query ? `No hotels match "${query}".` : 'No hotels yet.'}
               </Text>
-              <Pressable>
+              <Pressable onPress={() => setRequestOpen(true)} hitSlop={6}>
                 <Text style={styles.requestLink}>Request to add a hotel</Text>
               </Pressable>
             </View>
           }
         />
       )}
+
+      <RequestHotelModal
+        visible={requestOpen}
+        prefilledName={query.trim()}
+        onClose={() => setRequestOpen(false)}
+      />
     </SafeAreaView>
   );
+}
+
+function RequestHotelModal({
+  visible,
+  prefilledName,
+  onClose,
+}: {
+  visible: boolean;
+  prefilledName: string;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState(prefilledName);
+  const [city, setCity] = useState('');
+  const [country, setCountry] = useState('');
+  const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  // Re-sync the prefilled name whenever the modal opens with a fresh query.
+  useEffect(() => {
+    if (visible) {
+      setName(prefilledName);
+      setCity('');
+      setCountry('');
+      setNotes('');
+    }
+  }, [visible, prefilledName]);
+
+  const canSubmit =
+    name.trim().length >= 2 &&
+    city.trim().length >= 2 &&
+    country.trim().length >= 2 &&
+    !submitting;
+
+  const submit = async () => {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    try {
+      await submitHotelRequest({ name, city, country, notes });
+      onClose();
+      Alert.alert(
+        'Thanks for the suggestion',
+        "We'll review it within a few days and add it to the catalog if it's a fit.",
+      );
+    } catch (err: any) {
+      Alert.alert('Could not submit', err?.message ?? 'Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}
+    >
+      <SafeAreaView style={styles.modalContainer} edges={['top', 'bottom']}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.modalHeader}>
+            <Pressable onPress={onClose} hitSlop={12}>
+              <Text style={styles.modalCancel}>Cancel</Text>
+            </Pressable>
+            <Text style={styles.modalTitle}>Request hotel</Text>
+            <View style={{ width: 60 }} />
+          </View>
+
+          <View style={styles.modalBody}>
+            <Text style={styles.modalIntro}>
+              Don't see your hotel? Send it our way — we'll review and add it.
+            </Text>
+
+            <FieldLabel>HOTEL NAME</FieldLabel>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="e.g. The Aman New York"
+              placeholderTextColor={colors.text.faint}
+              style={styles.modalInput}
+              autoCapitalize="words"
+              autoCorrect={false}
+              maxLength={120}
+            />
+
+            <FieldLabel>CITY</FieldLabel>
+            <TextInput
+              value={city}
+              onChangeText={setCity}
+              placeholder="e.g. New York"
+              placeholderTextColor={colors.text.faint}
+              style={styles.modalInput}
+              autoCapitalize="words"
+              autoCorrect={false}
+              maxLength={80}
+            />
+
+            <FieldLabel>COUNTRY</FieldLabel>
+            <TextInput
+              value={country}
+              onChangeText={setCountry}
+              placeholder="e.g. United States"
+              placeholderTextColor={colors.text.faint}
+              style={styles.modalInput}
+              autoCapitalize="words"
+              autoCorrect={false}
+              maxLength={80}
+            />
+
+            <FieldLabel>NOTES (OPTIONAL)</FieldLabel>
+            <TextInput
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="Anything we should know? Branch, neighborhood…"
+              placeholderTextColor={colors.text.faint}
+              style={[styles.modalInput, styles.modalInputMultiline]}
+              multiline
+              maxLength={500}
+            />
+
+            <Pressable
+              onPress={submit}
+              disabled={!canSubmit}
+              style={({ pressed }) => [
+                styles.submitBtn,
+                !canSubmit && styles.submitBtnDisabled,
+                pressed && canSubmit && { opacity: 0.85 },
+              ]}
+            >
+              {submitting ? (
+                <ActivityIndicator color={colors.accent.goldDark} />
+              ) : (
+                <Text
+                  style={[
+                    styles.submitBtnText,
+                    !canSubmit && styles.submitBtnTextDisabled,
+                  ]}
+                >
+                  Submit request
+                </Text>
+              )}
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <Text style={styles.fieldLabel}>{children}</Text>;
 }
 
 const styles = StyleSheet.create({
@@ -250,5 +414,80 @@ const styles = StyleSheet.create({
   requestLink: {
     ...typography.body,
     color: colors.accent.gold,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: colors.bg.primary,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border.subtle,
+  },
+  modalCancel: {
+    ...typography.body,
+    color: colors.text.muted,
+    width: 60,
+  },
+  modalTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+  },
+  modalBody: {
+    flex: 1,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
+  },
+  modalIntro: {
+    ...typography.body,
+    color: colors.text.muted,
+    marginBottom: spacing.lg,
+    lineHeight: 22,
+  },
+  fieldLabel: {
+    ...typography.tiny,
+    color: colors.text.faint,
+    letterSpacing: 2,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  modalInput: {
+    height: 48,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    backgroundColor: colors.bg.secondary,
+    color: colors.text.primary,
+    fontSize: 16,
+  },
+  modalInputMultiline: {
+    height: 96,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+    textAlignVertical: 'top',
+  },
+  submitBtn: {
+    height: 54,
+    borderRadius: radius.lg,
+    backgroundColor: colors.accent.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.xl,
+  },
+  submitBtnDisabled: {
+    backgroundColor: colors.border.default,
+  },
+  submitBtnText: {
+    color: colors.accent.goldDark,
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  submitBtnTextDisabled: {
+    color: colors.text.faint,
   },
 });

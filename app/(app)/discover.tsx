@@ -1,6 +1,7 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -21,6 +22,8 @@ import { useAuth } from '@/stores/authStore';
 
 type FilterKey = VenueKey | 'all';
 
+const REFERRAL_BANNER_KEY = 'discover_referral_banner_dismissed';
+
 export default function DiscoverScreen() {
   const router = useRouter();
   const { user } = useAuth();
@@ -28,6 +31,26 @@ export default function DiscoverScreen() {
   const [activities, setActivities] = useState<PlaceholderActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [bannerVisible, setBannerVisible] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    AsyncStorage.getItem(REFERRAL_BANNER_KEY)
+      .then((v) => {
+        if (!cancelled && v !== 'true') setBannerVisible(true);
+      })
+      .catch(() => {
+        // Storage failure shouldn't block the feed — leave banner hidden.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const dismissBanner = () => {
+    setBannerVisible(false);
+    AsyncStorage.setItem(REFERRAL_BANNER_KEY, 'true').catch(() => {});
+  };
 
   // User-initiated refresh path — no race protection needed since the user
   // is on the screen waiting for it.
@@ -113,6 +136,35 @@ export default function DiscoverScreen() {
           />
         }
       >
+        {bannerVisible && (
+          <View style={styles.banner}>
+            <Pressable
+              onPress={() => router.push('/plans/referral')}
+              style={({ pressed }) => [styles.bannerInner, pressed && { opacity: 0.85 }]}
+              hitSlop={4}
+            >
+              <View style={styles.bannerIcon}>
+                <Ionicons name="gift-outline" size={18} color={colors.accent.gold} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.bannerTitle}>Invite friends, earn 7-day passes</Text>
+                <Text style={styles.bannerBody}>
+                  Each friend who joins gets you 7 days free.
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={14} color={colors.accent.gold} />
+            </Pressable>
+            <Pressable
+              onPress={dismissBanner}
+              style={styles.bannerClose}
+              hitSlop={10}
+              accessibilityLabel="Dismiss"
+            >
+              <Ionicons name="close" size={14} color={colors.text.muted} />
+            </Pressable>
+          </View>
+        )}
+
         {loading ? (
           <View style={styles.emptyState}>
             <ActivityIndicator color={colors.accent.gold} />
@@ -263,6 +315,53 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.xxl,
     gap: spacing.md,
+  },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border.gold,
+    backgroundColor: colors.bg.secondary,
+    overflow: 'hidden',
+  },
+  bannerInner: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    paddingLeft: spacing.lg,
+    paddingRight: spacing.sm,
+  },
+  bannerIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border.gold,
+    backgroundColor: colors.bg.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bannerTitle: {
+    ...typography.small,
+    color: colors.accent.gold,
+    fontWeight: '600',
+  },
+  bannerBody: {
+    ...typography.tiny,
+    color: colors.text.muted,
+    marginTop: 2,
+    letterSpacing: 0,
+    textTransform: 'none',
+  },
+  bannerClose: {
+    width: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderLeftWidth: 1,
+    borderLeftColor: colors.border.subtle,
   },
   card: {
     padding: spacing.lg,

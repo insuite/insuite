@@ -3,6 +3,12 @@ import { isSupabaseConfigured, supabase } from './supabase';
 export interface RedeemSuccess {
   ok: true;
   referrerName: string;
+  /**
+   * True when the redeemer's 7-day pass has been granted now (profile already
+   * complete). False when the redeemer still has to finish onboarding before
+   * the pass kicks in — see reward_redeemer_on_register trigger.
+   */
+  passGranted: boolean;
 }
 
 export interface RedeemFailure {
@@ -35,15 +41,19 @@ export async function redeemReferralCode(code: string): Promise<RedeemResult> {
   if (error) {
     return { ok: false, error: error.message };
   }
-  // RPC returns json: { ok, error?, referrer_name? }
+  // RPC returns json: { ok, error?, referrer_name?, pass_granted? }
   const payload = data as
-    | { ok: true; referrer_name: string }
+    | { ok: true; referrer_name: string; pass_granted?: boolean }
     | { ok: false; error: string };
 
   if (!payload.ok) {
     return { ok: false, error: payload.error };
   }
-  return { ok: true, referrerName: payload.referrer_name };
+  return {
+    ok: true,
+    referrerName: payload.referrer_name,
+    passGranted: payload.pass_granted === true,
+  };
 }
 
 /**

@@ -22,6 +22,22 @@ const DURATION_DAYS: Record<string, number> = {
 };
 
 /**
+ * Whether the user's profile has the unlimited (godmode) flag set. Owner /
+ * test accounts get this so they can bypass the paywall — see referrals_v2.sql
+ * for the column. Defaults to false on any error / unconfigured Supabase.
+ */
+export async function isUnlimitedUser(userId: string): Promise<boolean> {
+  if (!isSupabaseConfigured || !supabase) return false;
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('is_unlimited')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error || !data) return false;
+  return data.is_unlimited === true;
+}
+
+/**
  * The user's currently-active pass (most-recently-expiring), or null if none.
  */
 export async function getActivePass(userId: string): Promise<Pass | null> {
@@ -71,16 +87,19 @@ export async function countOwnActivities(userId: string): Promise<number> {
 /**
  * Decide whether the user is allowed to post a new activity right now.
  * Free for the first activity ever, gated on an active pass thereafter.
+ * Owner / test accounts with `is_unlimited = true` always pass.
  */
 export async function canPostActivity(userId: string): Promise<{
   allowed: boolean;
-  reason: 'first_free' | 'has_pass' | 'needs_pass';
+  reason: 'unlimited' | 'first_free' | 'has_pass' | 'needs_pass';
   activePass: Pass | null;
 }> {
-  const [count, pass] = await Promise.all([
+  const [unlimited, count, pass] = await Promise.all([
+    isUnlimitedUser(userId),
     countOwnActivities(userId),
     getActivePass(userId),
   ]);
+  if (unlimited) return { allowed: true, reason: 'unlimited', activePass: pass };
   if (pass) return { allowed: true, reason: 'has_pass', activePass: pass };
   if (count === 0) return { allowed: true, reason: 'first_free', activePass: null };
   return { allowed: false, reason: 'needs_pass', activePass: null };

@@ -139,6 +139,23 @@ export default function PlansScreen() {
 
         {!activePass && (
           <>
+            {/* Referral CTA above the plans — give users an out before showing prices. */}
+            <Pressable
+              onPress={() => router.push('/plans/referral')}
+              style={({ pressed }) => [styles.referralCta, pressed && { opacity: 0.85 }]}
+            >
+              <View style={styles.referralCtaIcon}>
+                <Ionicons name="gift-outline" size={18} color={colors.accent.gold} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.referralCtaTitle}>Or share your code</Text>
+                <Text style={styles.referralCtaBody}>
+                  7 days free for every friend who joins.
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.accent.gold} />
+            </Pressable>
+
             <Text style={styles.sectionLabel}>WHAT YOU GET</Text>
             <View style={styles.perksCard}>
               <Perk text="Unlimited posts" />
@@ -536,6 +553,38 @@ const styles = StyleSheet.create({
     color: colors.text.muted,
     marginTop: 2,
     lineHeight: 18,
+  },
+  referralCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border.gold,
+    backgroundColor: 'transparent',
+  },
+  referralCtaIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border.gold,
+    backgroundColor: colors.bg.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  referralCtaTitle: {
+    ...typography.body,
+    color: colors.accent.gold,
+    fontWeight: '600',
+  },
+  referralCtaBody: {
+    ...typography.small,
+    color: colors.text.secondary,
+    marginTop: 1,
   },
   restoreLink: {
     alignItems: 'center',

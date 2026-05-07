@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -20,9 +20,18 @@ type Status = 'idle' | 'checking' | 'success' | 'error';
 
 export default function RedeemScreen() {
   const router = useRouter();
-  const [code, setCode] = useState('');
+  // ?code= prefill from deep links — see app/redeem/[code].tsx for the
+  // shareable insuite2://redeem/JAMES7 entry point.
+  const params = useLocalSearchParams<{ code?: string }>();
+  const [code, setCode] = useState((params.code ?? '').toUpperCase());
   const [status, setStatus] = useState<Status>('idle');
   const [message, setMessage] = useState<string | null>(null);
+
+  // If the deep-link param updates after first render (rare but possible
+  // when navigating between deep links), keep the input in sync.
+  useEffect(() => {
+    if (params.code) setCode(params.code.toUpperCase());
+  }, [params.code]);
 
   const redeem = async () => {
     const trimmed = code.trim().toUpperCase();
@@ -37,7 +46,9 @@ export default function RedeemScreen() {
     }
     setStatus('success');
     setMessage(
-      `You've earned a 7-day free pass! ${result.referrerName} earns theirs when you post your first activity.`,
+      result.passGranted
+        ? `You've earned a 7-day free pass! ${result.referrerName} earns theirs when you post your first activity.`
+        : `Code from ${result.referrerName} accepted. Finish your profile and your 7-day pass kicks in automatically.`,
     );
   };
 

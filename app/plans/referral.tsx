@@ -45,12 +45,24 @@ export default function ReferralScreen() {
   const rewardsEarned = referrals.filter((r) => r.rewarded).length;
 
   const onShare = async () => {
+    if (!code) return;
+    // Plain-text message with the code highlighted + a scheme deep link for
+    // friends who already have InSuite installed. Once we have a hosted
+    // domain we can swap this for a universal link that also pitches install
+    // to non-users.
+    const message = [
+      `🥂 Want company at your hotel?`,
+      ``,
+      `Join me on InSuite — meet fellow solo guests for breakfast, the gym, lounge, or dinner.`,
+      ``,
+      `Use code  ${code}  for a free 7-day pass.`,
+      ``,
+      `insuite2://redeem/${code}`,
+    ].join('\n');
     try {
-      await Share.share({
-        message: `Join me on InSuite with code ${code} — meet fellow solo hotel guests for breakfast, gym, lounge, or dinner.`,
-      });
+      await Share.share({ message });
     } catch {
-      // ignore
+      // ignore — user-cancelled share
     }
   };
 

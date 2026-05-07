@@ -39,6 +39,7 @@ export default function RootLayout() {
           />
           <Stack.Screen name="plans" options={{ headerShown: false }} />
           <Stack.Screen name="legal" options={{ headerShown: false }} />
+          <Stack.Screen name="redeem/[code]" options={{ headerShown: false }} />
         </Stack>
       </View>
       <StatusBar style="light" />

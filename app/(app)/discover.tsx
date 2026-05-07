@@ -476,19 +476,23 @@ const styles = StyleSheet.create({
   },
   filterScroll: {
     flexGrow: 0,
+    height: 56,
   },
   filterRow: {
     gap: spacing.sm,
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.md,
+    alignItems: 'center',
   },
   filterChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
+    height: 40,
+    paddingHorizontal: 16,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.border.default,
     backgroundColor: colors.bg.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   filterChipActive: {
     borderColor: colors.accent.gold,
@@ -496,7 +500,7 @@ const styles = StyleSheet.create({
   },
   filterChipText: {
     ...typography.small,
-    color: colors.text.muted,
+    color: colors.text.secondary,
   },
   filterChipTextActive: {
     color: colors.text.primary,

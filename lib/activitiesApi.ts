@@ -11,6 +11,46 @@ import type { ActivityDraft } from '@/stores/activityDraftStore';
 
 import { isSupabaseConfigured, supabase } from './supabase';
 
+export interface CitySummary {
+  city: string;
+  country: string;
+  hotelCount: number;
+}
+
+/**
+ * Distinct cities backed by the `hotels` table, ordered by hotel count desc
+ * (so the Discover picker / hotel chips surface the most-stocked cities first).
+ * Falls back to the bundled static list in demo mode.
+ */
+export async function listCities(): Promise<CitySummary[]> {
+  const aggregate = (rows: { city: string; country: string }[]): CitySummary[] => {
+    const map = new Map<string, CitySummary>();
+    for (const r of rows) {
+      const k = `${r.city}|${r.country}`;
+      const existing = map.get(k);
+      if (existing) {
+        existing.hotelCount += 1;
+      } else {
+        map.set(k, { city: r.city, country: r.country, hotelCount: 1 });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      if (b.hotelCount !== a.hotelCount) return b.hotelCount - a.hotelCount;
+      return a.city.localeCompare(b.city);
+    });
+  };
+
+  if (!isSupabaseConfigured || !supabase) {
+    return aggregate(STATIC_HOTELS.map((h) => ({ city: h.city, country: h.country })));
+  }
+  const { data, error } = await supabase.from('hotels').select('city, country');
+  if (error || !data) {
+    if (error) console.warn('[hotels] cities fetch failed', error.message);
+    return aggregate(STATIC_HOTELS.map((h) => ({ city: h.city, country: h.country })));
+  }
+  return aggregate(data as unknown as { city: string; country: string }[]);
+}
+
 export interface HotelRequestInput {
   name: string;
   city: string;

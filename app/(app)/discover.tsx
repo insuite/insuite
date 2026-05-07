@@ -4,11 +4,14 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,12 +20,13 @@ import { Avatar } from '@/components/ui/Avatar';
 import { colors, radius, spacing, typography } from '@/constants/colors';
 import { type PlaceholderActivity } from '@/constants/placeholderActivities';
 import { venueFilters, venueMap, type VenueKey } from '@/constants/venues';
-import { listActivities } from '@/lib/activitiesApi';
+import { listActivities, listCities, type CitySummary } from '@/lib/activitiesApi';
 import { useAuth } from '@/stores/authStore';
 
 type FilterKey = VenueKey | 'all';
 
 const REFERRAL_BANNER_KEY = 'discover_referral_banner_dismissed';
+const SELECTED_CITY_KEY = 'discover_selected_city';
 
 export default function DiscoverScreen() {
   const router = useRouter();
@@ -32,6 +36,47 @@ export default function DiscoverScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [bannerVisible, setBannerVisible] = useState(false);
+  // null = "All cities", otherwise filter activities to this city.
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [cityPickerOpen, setCityPickerOpen] = useState(false);
+  const [cities, setCities] = useState<CitySummary[]>([]);
+
+  // Restore the previously-picked city across launches so the user doesn't
+  // have to re-pick every time. AsyncStorage is the same one we use for the
+  // referral banner — no extra dep.
+  useEffect(() => {
+    let cancelled = false;
+    AsyncStorage.getItem(SELECTED_CITY_KEY)
+      .then((v) => {
+        if (!cancelled && v) setSelectedCity(v);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    listCities()
+      .then((list) => {
+        if (!cancelled) setCities(list);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const pickCity = (city: string | null) => {
+    setSelectedCity(city);
+    setCityPickerOpen(false);
+    if (city) {
+      AsyncStorage.setItem(SELECTED_CITY_KEY, city).catch(() => {});
+    } else {
+      AsyncStorage.removeItem(SELECTED_CITY_KEY).catch(() => {});
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -83,23 +128,47 @@ export default function DiscoverScreen() {
     setRefreshing(false);
   }, [load]);
 
+  const cityFiltered = selectedCity
+    ? activities.filter(
+        (a) => a.hotelCity.toLowerCase() === selectedCity.toLowerCase(),
+      )
+    : activities;
   const feed =
     filter === 'all'
-      ? activities
-      : activities.filter((a) => a.venue === filter);
+      ? cityFiltered
+      : cityFiltered.filter((a) => a.venue === filter);
+
+  const headlineCity = selectedCity ?? 'anywhere';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.kicker}>DISCOVER</Text>
-          <Text style={styles.title}>Tonight in Singapore</Text>
+          <Text style={styles.title} numberOfLines={1}>
+            Tonight in {headlineCity}
+          </Text>
         </View>
-        <Pressable style={styles.cityChip} hitSlop={6}>
+        <Pressable
+          style={styles.cityChip}
+          onPress={() => setCityPickerOpen(true)}
+          hitSlop={6}
+        >
           <Ionicons name="location-outline" size={14} color={colors.accent.gold} />
-          <Text style={styles.cityChipText}>Singapore</Text>
+          <Text style={styles.cityChipText} numberOfLines={1}>
+            {selectedCity ?? 'All cities'}
+          </Text>
+          <Ionicons name="chevron-down" size={12} color={colors.accent.gold} />
         </Pressable>
       </View>
+
+      <CityPickerModal
+        visible={cityPickerOpen}
+        cities={cities}
+        selected={selectedCity}
+        onClose={() => setCityPickerOpen(false)}
+        onPick={pickCity}
+      />
 
       <ScrollView
         horizontal
@@ -192,6 +261,128 @@ export default function DiscoverScreen() {
         )}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function CityPickerModal({
+  visible,
+  cities,
+  selected,
+  onClose,
+  onPick,
+}: {
+  visible: boolean;
+  cities: CitySummary[];
+  selected: string | null;
+  onClose: () => void;
+  onPick: (city: string | null) => void;
+}) {
+  const [query, setQuery] = useState('');
+
+  // Reset search when the modal reopens.
+  useEffect(() => {
+    if (visible) setQuery('');
+  }, [visible]);
+
+  const filtered = query.trim()
+    ? cities.filter((c) =>
+        `${c.city} ${c.country}`.toLowerCase().includes(query.trim().toLowerCase()),
+      )
+    : cities;
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}
+    >
+      <SafeAreaView style={styles.pickerContainer} edges={['top', 'bottom']}>
+        <View style={styles.pickerHeader}>
+          <Pressable onPress={onClose} hitSlop={12}>
+            <Text style={styles.pickerCancel}>Cancel</Text>
+          </Pressable>
+          <Text style={styles.pickerTitle}>Choose city</Text>
+          <View style={{ width: 60 }} />
+        </View>
+
+        <View style={styles.pickerSearch}>
+          <Ionicons name="search" size={16} color={colors.text.faint} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search cities"
+            placeholderTextColor={colors.text.faint}
+            style={styles.pickerSearchInput}
+            autoCapitalize="none"
+            autoCorrect={false}
+            clearButtonMode="while-editing"
+          />
+        </View>
+
+        <FlatList
+          data={filtered}
+          keyExtractor={(c) => `${c.city}|${c.country}`}
+          contentContainerStyle={styles.pickerList}
+          keyboardShouldPersistTaps="handled"
+          ListHeaderComponent={
+            <Pressable
+              onPress={() => onPick(null)}
+              style={({ pressed }) => [
+                styles.pickerRow,
+                selected === null && styles.pickerRowSelected,
+                pressed && { opacity: 0.6 },
+              ]}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.pickerRowName}>All cities</Text>
+                <Text style={styles.pickerRowSub}>Show activities everywhere</Text>
+              </View>
+              {selected === null && (
+                <Ionicons
+                  name="checkmark-circle"
+                  size={20}
+                  color={colors.accent.gold}
+                />
+              )}
+            </Pressable>
+          }
+          renderItem={({ item }) => {
+            const isSelected =
+              selected != null && selected.toLowerCase() === item.city.toLowerCase();
+            return (
+              <Pressable
+                onPress={() => onPick(item.city)}
+                style={({ pressed }) => [
+                  styles.pickerRow,
+                  isSelected && styles.pickerRowSelected,
+                  pressed && { opacity: 0.6 },
+                ]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.pickerRowName}>{item.city}</Text>
+                  <Text style={styles.pickerRowSub}>
+                    {item.country} · {item.hotelCount} hotels
+                  </Text>
+                </View>
+                {isSelected && (
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={20}
+                    color={colors.accent.gold}
+                  />
+                )}
+              </Pressable>
+            );
+          }}
+          ListEmptyComponent={
+            <Text style={styles.pickerEmpty}>
+              {query ? `No cities match "${query}".` : 'No cities yet.'}
+            </Text>
+          }
+        />
+      </SafeAreaView>
+    </Modal>
   );
 }
 
@@ -362,6 +553,78 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderLeftWidth: 1,
     borderLeftColor: colors.border.subtle,
+  },
+  pickerContainer: {
+    flex: 1,
+    backgroundColor: colors.bg.primary,
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border.subtle,
+  },
+  pickerCancel: {
+    ...typography.body,
+    color: colors.text.muted,
+    width: 60,
+  },
+  pickerTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+  },
+  pickerSearch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    height: 44,
+    paddingHorizontal: spacing.md,
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    backgroundColor: colors.bg.secondary,
+  },
+  pickerSearchInput: {
+    flex: 1,
+    color: colors.text.primary,
+    fontSize: 15,
+  },
+  pickerList: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xxl,
+  },
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border.subtle,
+  },
+  pickerRowSelected: {
+    backgroundColor: colors.border.active,
+  },
+  pickerRowName: {
+    ...typography.h3,
+    color: colors.text.primary,
+  },
+  pickerRowSub: {
+    ...typography.small,
+    color: colors.text.muted,
+    marginTop: 2,
+  },
+  pickerEmpty: {
+    ...typography.body,
+    color: colors.text.muted,
+    textAlign: 'center',
+    paddingVertical: spacing.xl,
   },
   card: {
     padding: spacing.lg,

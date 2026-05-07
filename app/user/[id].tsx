@@ -2,7 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
+  ActionSheetIOS,
   ActivityIndicator,
+  Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,19 +14,26 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ReportSheet } from '@/components/moderation/ReportSheet';
 import { Avatar } from '@/components/ui/Avatar';
 import { AvatarLightbox } from '@/components/ui/AvatarLightbox';
 import { colors, radius, spacing, typography } from '@/constants/colors';
 import { languageMap } from '@/constants/languages';
 import { venueMap } from '@/constants/venues';
+import { blockUser, isBlocked, unblockUser } from '@/lib/moderationApi';
 import { getUserProfile, type UserProfileSummary } from '@/lib/profileApi';
+import { useAuth } from '@/stores/authStore';
 
 export default function UserProfileScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuth();
   const [profile, setProfile] = useState<UserProfileSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [avatarOpen, setAvatarOpen] = useState(false);
+  const [blocked, setBlocked] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const isOwnProfile = !!user && !!id && user.id === id;
 
   useEffect(() => {
     if (!id) {
@@ -41,14 +51,108 @@ export default function UserProfileScreen() {
     };
   }, [id]);
 
+  // Sync the Block/Unblock state on focus.
+  useEffect(() => {
+    if (!id || isOwnProfile) return;
+    let cancelled = false;
+    isBlocked(id).then((b) => {
+      if (!cancelled) setBlocked(b);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, isOwnProfile]);
+
+  const onBlock = () => {
+    if (!id || !profile) return;
+    Alert.alert(
+      `Block ${profile.firstName}?`,
+      "They won't see your activities or messages, and you won't see theirs.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await blockUser(id);
+              setBlocked(true);
+              router.back();
+            } catch (err: any) {
+              Alert.alert('Could not block', err?.message ?? 'Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const onUnblock = async () => {
+    if (!id) return;
+    try {
+      await unblockUser(id);
+      setBlocked(false);
+    } catch (err: any) {
+      Alert.alert('Could not unblock', err?.message ?? 'Please try again.');
+    }
+  };
+
+  const showMenu = () => {
+    if (isOwnProfile || !profile) return;
+    const blockLabel = blocked ? `Unblock ${profile.firstName}` : `Block ${profile.firstName}`;
+    const reportLabel = `Report ${profile.firstName}`;
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: [reportLabel, blockLabel, 'Cancel'],
+          destructiveButtonIndex: blocked ? undefined : 1,
+          cancelButtonIndex: 2,
+          userInterfaceStyle: 'dark',
+        },
+        (idx) => {
+          if (idx === 0) setReportOpen(true);
+          else if (idx === 1) (blocked ? onUnblock() : onBlock());
+        },
+      );
+    } else {
+      Alert.alert('Manage', undefined, [
+        { text: reportLabel, onPress: () => setReportOpen(true) },
+        {
+          text: blockLabel,
+          style: blocked ? 'default' : 'destructive',
+          onPress: blocked ? onUnblock : onBlock,
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.navBar}>
         <Pressable onPress={() => router.back()} hitSlop={12} style={styles.navBtn}>
           <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
         </Pressable>
-        <View style={styles.navBtn} />
+        {isOwnProfile || !profile ? (
+          <View style={styles.navBtn} />
+        ) : (
+          <Pressable onPress={showMenu} hitSlop={12} style={styles.navBtn}>
+            <Ionicons
+              name="ellipsis-horizontal"
+              size={22}
+              color={colors.text.primary}
+            />
+          </Pressable>
+        )}
       </View>
+      {id && profile && (
+        <ReportSheet
+          visible={reportOpen}
+          onClose={() => setReportOpen(false)}
+          target={{ userId: id }}
+          title={`Report ${profile.firstName}`}
+        />
+      )}
 
       {loading ? (
         <View style={styles.center}>

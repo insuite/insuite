@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ReportSheet } from '@/components/moderation/ReportSheet';
 import { Avatar } from '@/components/ui/Avatar';
 import { colors, radius, spacing, typography } from '@/constants/colors';
 import { type PlaceholderActivity, type PlaceholderGuest } from '@/constants/placeholderActivities';
@@ -41,6 +42,7 @@ export default function ActivityDetailScreen() {
   const [myStatus, setMyStatus] = useState<JoinRequestStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [sendState, setSendState] = useState<LocalSendState>('idle');
+  const [reportOpen, setReportOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) {
@@ -204,12 +206,46 @@ export default function ActivityDetailScreen() {
     }
   };
 
+  const showGuestMenu = () => {
+    if (!id) return;
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Report activity', 'Cancel'],
+          destructiveButtonIndex: 0,
+          cancelButtonIndex: 1,
+          userInterfaceStyle: 'dark',
+        },
+        (idx) => {
+          if (idx === 0) setReportOpen(true);
+        },
+      );
+    } else {
+      Alert.alert('Activity', undefined, [
+        {
+          text: 'Report activity',
+          style: 'destructive',
+          onPress: () => setReportOpen(true),
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <NavBar
         onBack={() => router.back()}
-        onMenu={isHost ? showHostMenu : undefined}
+        onMenu={isHost ? showHostMenu : showGuestMenu}
       />
+      {id && (
+        <ReportSheet
+          visible={reportOpen}
+          onClose={() => setReportOpen(false)}
+          target={{ activityId: id }}
+          title="Report activity"
+        />
+      )}
 
       <ScrollView
         showsVerticalScrollIndicator={false}

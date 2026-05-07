@@ -40,8 +40,9 @@ update profiles set
 where id = '86f758e6-92aa-48ec-91f9-ff422ba18427';
 
 -- ────────────────────────────────────────────────────────────────────
--- STEP 2: insert 8 active Tokyo activities. Note prefix `[ss]` is the
--- marker for cleanup — don't strip it.
+-- STEP 2: insert 8 active Tokyo activities. Cleanup later (in
+-- screenshot_polish.sql STEP B) matches by exact note text — no
+-- in-DB marker is needed, so the cards display clean copy as-is.
 -- ────────────────────────────────────────────────────────────────────
 
 insert into activities (host_id, hotel_id, venue, date, time_from, time_to, note, max_spots, status)
@@ -50,14 +51,14 @@ values
   ('42b2c446-cebb-414d-a72d-a5f7f69e1e00'::uuid,
    (select id from hotels where name = 'Aman Tokyo' limit 1),
    'breakfast', current_date + 1, '08:00', '09:00',
-   '[ss] Looking for breakfast company at the executive lounge.',
+   'Looking for breakfast company at the executive lounge.',
    3, 'active'),
 
   -- Yuko · pool · Park Hyatt Tokyo · today 4–5:30pm
   ('86f758e6-92aa-48ec-91f9-ff422ba18427'::uuid,
    (select id from hotels where name = 'Park Hyatt Tokyo' limit 1),
    'pool', current_date, '16:00', '17:30',
-   '[ss] Easy laps then sun on the deck. Up for a chat.',
+   'Easy laps then sun on the deck. Up for a chat.',
    3, 'active'),
 
   -- Julian · dinner · The Tokyo EDITION, Toranomon · upcoming Saturday 7:30–9:30pm
@@ -66,14 +67,14 @@ values
    'dinner',
    (current_date + ((6 - extract(dow from current_date)::int + 7) % 7))::date,
    '19:30', '21:30',
-   '[ss] Sushi at the bar, then drinks if you''re game.',
+   'Sushi at the bar, then drinks if you''re game.',
    3, 'active'),
 
   -- Yuko · lounge · The Peninsula Tokyo · today 7–8:30pm
   ('86f758e6-92aa-48ec-91f9-ff422ba18427'::uuid,
    (select id from hotels where name = 'The Peninsula Tokyo' limit 1),
    'lounge', current_date, '19:00', '20:30',
-   '[ss] Nightcap at The Peter. Quiet conversation welcome.',
+   'Nightcap at The Peter. Quiet conversation welcome.',
    3, 'active'),
 
   -- Julian · spa · Mandarin Oriental Tokyo · upcoming Sunday 3–4:30pm
@@ -82,21 +83,21 @@ values
    'spa',
    (current_date + ((0 - extract(dow from current_date)::int + 7) % 7 + 7))::date,
    '15:00', '16:30',
-   '[ss] Hammam then tea on the lounge floor.',
+   'Hammam then tea on the lounge floor.',
    2, 'active'),
 
   -- Yuko · gym · Bulgari Hotel Tokyo · tomorrow 7–8am
   ('86f758e6-92aa-48ec-91f9-ff422ba18427'::uuid,
    (select id from hotels where name = 'Bulgari Hotel Tokyo' limit 1),
    'gym', current_date + 1, '07:00', '08:00',
-   '[ss] Light morning lift. Happy to spot.',
+   'Light morning lift. Happy to spot.',
    2, 'active'),
 
   -- Julian · breakfast · Park Hyatt Tokyo · day after tomorrow 9–10am
   ('42b2c446-cebb-414d-a72d-a5f7f69e1e00'::uuid,
    (select id from hotels where name = 'Park Hyatt Tokyo' limit 1),
    'breakfast', current_date + 2, '09:00', '10:00',
-   '[ss] Window seat at Girandole. Bring a book if you like.',
+   'Window seat at Girandole. Bring a book if you like.',
    3, 'active'),
 
   -- Yuko · dinner · Aman Tokyo · upcoming Saturday 8–9:30pm
@@ -105,7 +106,7 @@ values
    'dinner',
    (current_date + ((6 - extract(dow from current_date)::int + 7) % 7))::date,
    '20:00', '21:30',
-   '[ss] Kaiseki at Musashi. Anyone enjoying solo travel welcome.',
+   'Kaiseki at Musashi. Anyone enjoying solo travel welcome.',
    3, 'active');
 
 -- ────────────────────────────────────────────────────────────────────

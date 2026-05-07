@@ -407,6 +407,9 @@ function ActivityCard({
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.venueLabel}>{venue.label}</Text>
+          <Text style={styles.hotelName} numberOfLines={1}>
+            {activity.hotelName}
+          </Text>
           <Text style={styles.cardMeta}>
             {activity.dateLabel} · {activity.timeFrom} – {activity.timeTo}
           </Text>
@@ -655,6 +658,12 @@ const styles = StyleSheet.create({
   venueLabel: {
     ...typography.h3,
     color: colors.text.primary,
+  },
+  hotelName: {
+    ...typography.small,
+    color: colors.text.secondary,
+    fontWeight: '500',
+    marginTop: 2,
   },
   cardMeta: {
     ...typography.small,

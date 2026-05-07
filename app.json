@@ -14,7 +14,9 @@
       "usesAppleSignIn": true,
       "infoPlist": {
         "UIUserInterfaceStyle": "Dark",
-        "UIBackgroundModes": ["remote-notification"],
+        "UIBackgroundModes": [
+          "remote-notification"
+        ],
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -63,7 +65,8 @@
         {
           "color": "#c9b98a"
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

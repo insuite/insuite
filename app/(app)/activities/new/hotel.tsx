@@ -56,19 +56,24 @@ export default function HotelStep() {
 
   // Top cities for quick-filter chips above the search box. Sorted by hotel
   // count desc so the most-stocked cities show first; cap at 8 to keep one
-  // horizontal row from feeling unbounded.
+  // horizontal row from feeling unbounded. PINNED cities are always present
+  // (regardless of count) — useful for the home market that may not have the
+  // most rooms but still matters editorially.
   const cityChips = useMemo(() => {
+    const PINNED = ['Taipei'];
     const counts = new Map<string, number>();
     for (const h of hotels) {
       counts.set(h.city, (counts.get(h.city) ?? 0) + 1);
     }
-    return Array.from(counts.entries())
+    const sorted = Array.from(counts.entries())
       .sort((a, b) => {
         if (b[1] !== a[1]) return b[1] - a[1];
         return a[0].localeCompare(b[0]);
       })
-      .slice(0, 8)
       .map(([city]) => city);
+    const pinned = PINNED.filter((c) => counts.has(c));
+    const rest = sorted.filter((c) => !pinned.includes(c)).slice(0, 8);
+    return [...pinned, ...rest];
   }, [hotels]);
 
   const activeCity = query.trim().toLowerCase();
@@ -419,17 +424,18 @@ const styles = StyleSheet.create({
   },
   cityChipsScroll: {
     flexGrow: 0,
+    height: 56,
     marginBottom: spacing.sm,
     marginHorizontal: -spacing.xl,
   },
   cityChipsRow: {
     gap: spacing.sm,
     paddingHorizontal: spacing.xl,
+    alignItems: 'center',
   },
   cityChip: {
-    minHeight: 38,
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: 10,
+    height: 40,
+    paddingHorizontal: 16,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.border.default,
@@ -444,7 +450,6 @@ const styles = StyleSheet.create({
   cityChipText: {
     ...typography.small,
     color: colors.text.secondary,
-    lineHeight: 18,
   },
   cityChipTextActive: {
     color: colors.text.primary,

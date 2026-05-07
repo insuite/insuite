@@ -20,6 +20,7 @@ import { type PlaceholderActivity, type PlaceholderGuest } from '@/constants/pla
 import { venueMap } from '@/constants/venues';
 import {
   cancelActivity,
+  deleteActivity,
   getActivity,
   getMyJoinRequest,
   listJoinedGuests,
@@ -104,6 +105,34 @@ export default function ActivityDetailScreen() {
   const venue = venueMap[activity.venue];
   const isHost = !!user && user.id === activity.host.id;
   const isCancelled = activity.status === 'cancelled';
+  // dateIso is YYYY-MM-DD; compare against today's local YYYY-MM-DD so an
+  // activity from earlier today still counts as "expired" once the date page
+  // has flipped on the device.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const isExpired = activity.dateIso < todayIso;
+
+  const askDelete = () => {
+    if (!id) return;
+    Alert.alert(
+      'Delete this activity?',
+      'It will be permanently removed, along with any messages from it.',
+      [
+        { text: 'Keep', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteActivity(id);
+              router.back();
+            } catch (err: any) {
+              Alert.alert('Could not delete', err?.message ?? 'Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const showHostMenu = () => {
     if (!id) return;
@@ -129,6 +158,29 @@ export default function ActivityDetailScreen() {
         ],
       );
     };
+
+    // Past or already-cancelled: only deletion makes sense.
+    if (isCancelled || isExpired) {
+      if (Platform.OS === 'ios') {
+        ActionSheetIOS.showActionSheetWithOptions(
+          {
+            options: ['Delete activity', 'Close'],
+            destructiveButtonIndex: 0,
+            cancelButtonIndex: 1,
+            userInterfaceStyle: 'dark',
+          },
+          (idx) => {
+            if (idx === 0) askDelete();
+          },
+        );
+      } else {
+        Alert.alert('Manage activity', undefined, [
+          { text: 'Delete activity', style: 'destructive', onPress: askDelete },
+          { text: 'Close', style: 'cancel' },
+        ]);
+      }
+      return;
+    }
 
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
@@ -156,7 +208,7 @@ export default function ActivityDetailScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <NavBar
         onBack={() => router.back()}
-        onMenu={isHost && !isCancelled ? showHostMenu : undefined}
+        onMenu={isHost ? showHostMenu : undefined}
       />
 
       <ScrollView

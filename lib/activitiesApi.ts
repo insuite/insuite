@@ -407,6 +407,19 @@ export async function cancelActivity(id: string): Promise<void> {
   if (error) throw error;
 }
 
+/**
+ * Permanently remove an activity. Cascades into join_requests and
+ * conversations (and via them, messages) per the schema FKs. Caller is
+ * responsible for only offering this for activities that are cancelled or
+ * past their date — RLS lets the host delete any of their own, but the UX
+ * shouldn't expose that for active future ones (use cancelActivity instead).
+ */
+export async function deleteActivity(id: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) return;
+  const { error } = await supabase.from('activities').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // =====================================================
 // Join requests
 // =====================================================

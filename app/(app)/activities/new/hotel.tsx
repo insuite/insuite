@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
   },
   cityChipsScroll: {
     flexGrow: 0,
-    height: 56,
+    height: 60,
     marginBottom: spacing.sm,
     marginHorizontal: -spacing.xl,
   },
@@ -434,8 +434,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cityChip: {
-    height: 40,
-    paddingHorizontal: 16,
+    height: 44,
+    paddingHorizontal: 18,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.border.default,

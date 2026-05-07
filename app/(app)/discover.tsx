@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
   },
   filterScroll: {
     flexGrow: 0,
-    height: 56,
+    height: 64,
   },
   filterRow: {
     gap: spacing.sm,
@@ -488,8 +488,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   filterChip: {
-    height: 40,
-    paddingHorizontal: 16,
+    height: 44,
+    paddingHorizontal: 18,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.border.default,

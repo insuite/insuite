@@ -427,12 +427,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
   },
   cityChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
+    minHeight: 38,
+    paddingHorizontal: spacing.md + 2,
+    paddingVertical: 10,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.border.default,
     backgroundColor: colors.bg.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cityChipActive: {
     borderColor: colors.accent.gold,
@@ -440,7 +443,8 @@ const styles = StyleSheet.create({
   },
   cityChipText: {
     ...typography.small,
-    color: colors.text.muted,
+    color: colors.text.secondary,
+    lineHeight: 18,
   },
   cityChipTextActive: {
     color: colors.text.primary,

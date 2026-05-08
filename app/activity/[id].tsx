@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ReportSheet } from '@/components/moderation/ReportSheet';
 import { Avatar } from '@/components/ui/Avatar';
+import { LoadErrorState } from '@/components/ui/LoadErrorState';
 import { colors, radius, spacing, typography } from '@/constants/colors';
 import { type PlaceholderActivity, type PlaceholderGuest } from '@/constants/placeholderActivities';
 import { venueMap } from '@/constants/venues';
@@ -41,6 +42,7 @@ export default function ActivityDetailScreen() {
   const [joinedGuests, setJoinedGuests] = useState<PlaceholderGuest[]>([]);
   const [myStatus, setMyStatus] = useState<JoinRequestStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [errored, setErrored] = useState(false);
   const [sendState, setSendState] = useState<LocalSendState>('idle');
   const [reportOpen, setReportOpen] = useState(false);
 
@@ -49,15 +51,22 @@ export default function ActivityDetailScreen() {
       setLoading(false);
       return;
     }
-    const [a, guests, mine] = await Promise.all([
-      getActivity(id),
-      listJoinedGuests(id),
-      getMyJoinRequest(id),
-    ]);
-    setActivity(a);
-    setJoinedGuests(guests);
-    setMyStatus(mine.exists ? mine.status ?? 'pending' : null);
-    setLoading(false);
+    setErrored(false);
+    try {
+      const [a, guests, mine] = await Promise.all([
+        getActivity(id),
+        listJoinedGuests(id),
+        getMyJoinRequest(id),
+      ]);
+      setActivity(a);
+      setJoinedGuests(guests);
+      setMyStatus(mine.exists ? mine.status ?? 'pending' : null);
+    } catch (err: any) {
+      console.warn('[activity-detail] load failed', err?.message ?? err);
+      setErrored(true);
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
 
   // useFocusEffect (rather than useEffect) so the page also reloads when the
@@ -88,6 +97,15 @@ export default function ActivityDetailScreen() {
         <View style={styles.center}>
           <ActivityIndicator color={colors.accent.gold} />
         </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (errored) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <NavBar onBack={() => router.back()} />
+        <LoadErrorState title="Couldn't load this activity." onRetry={load} />
       </SafeAreaView>
     );
   }

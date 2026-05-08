@@ -31,17 +31,23 @@ export const notificationsStore = {
   },
   /**
    * Refresh both counts from DB in parallel. Caller passes the current user id
-   * (avoids a circular import with authStore).
+   * (avoids a circular import with authStore). Background poll, so transient
+   * load failures are swallowed — the next refresh tick will retry naturally
+   * and the existing counts stay on screen until then.
    */
   refresh: async (userId: string) => {
-    const [requests, convos] = await Promise.all([
-      listIncomingRequests(userId),
-      listConversations(userId),
-    ]);
-    notificationsStore.set({
-      pendingRequestsCount: requests.length,
-      unreadConversationsCount: convos.filter((c) => c.unread).length,
-    });
+    try {
+      const [requests, convos] = await Promise.all([
+        listIncomingRequests(userId),
+        listConversations(userId),
+      ]);
+      notificationsStore.set({
+        pendingRequestsCount: requests.length,
+        unreadConversationsCount: convos.filter((c) => c.unread).length,
+      });
+    } catch (err: any) {
+      console.warn('[notifications] refresh failed', err?.message ?? err);
+    }
   },
   subscribe: (fn: () => void) => {
     listeners.add(fn);

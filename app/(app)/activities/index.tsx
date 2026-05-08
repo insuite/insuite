@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/ui/Avatar';
+import { LoadErrorState } from '@/components/ui/LoadErrorState';
 import { colors, radius, spacing, typography } from '@/constants/colors';
 import { type PlaceholderActivity } from '@/constants/placeholderActivities';
 import { venueMap } from '@/constants/venues';
@@ -33,6 +34,7 @@ export default function ActivitiesScreen() {
   const [going, setGoing] = useState<PlaceholderActivity[]>([]);
   const [requested, setRequested] = useState<PlaceholderActivity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errored, setErrored] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   // User-initiated refresh — no race protection needed.
@@ -41,18 +43,26 @@ export default function ActivitiesScreen() {
       setHosting([]);
       setGoing([]);
       setRequested([]);
+      setErrored(false);
       setLoading(false);
       return;
     }
-    const [h, g, r] = await Promise.all([
-      listMyActivities(user.id),
-      listMyJoinedActivities(user.id),
-      listMyRequestedActivities(user.id),
-    ]);
-    setHosting(h);
-    setGoing(g);
-    setRequested(r);
-    setLoading(false);
+    setErrored(false);
+    try {
+      const [h, g, r] = await Promise.all([
+        listMyActivities(user.id),
+        listMyJoinedActivities(user.id),
+        listMyRequestedActivities(user.id),
+      ]);
+      setHosting(h);
+      setGoing(g);
+      setRequested(r);
+    } catch (err: any) {
+      console.warn('[my-activities] list failed', err?.message ?? err);
+      setErrored(true);
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
 
   useFocusEffect(
@@ -63,19 +73,28 @@ export default function ActivitiesScreen() {
           setHosting([]);
           setGoing([]);
           setRequested([]);
+          setErrored(false);
           setLoading(false);
           return;
         }
-        const [h, g, r] = await Promise.all([
-          listMyActivities(user.id),
-          listMyJoinedActivities(user.id),
-          listMyRequestedActivities(user.id),
-        ]);
-        if (cancelled) return;
-        setHosting(h);
-        setGoing(g);
-        setRequested(r);
-        setLoading(false);
+        setErrored(false);
+        try {
+          const [h, g, r] = await Promise.all([
+            listMyActivities(user.id),
+            listMyJoinedActivities(user.id),
+            listMyRequestedActivities(user.id),
+          ]);
+          if (cancelled) return;
+          setHosting(h);
+          setGoing(g);
+          setRequested(r);
+        } catch (err: any) {
+          if (cancelled) return;
+          console.warn('[my-activities] list failed', err?.message ?? err);
+          setErrored(true);
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
       })();
       return () => {
         cancelled = true;
@@ -126,6 +145,8 @@ export default function ActivitiesScreen() {
         <View style={styles.center}>
           <ActivityIndicator color={colors.accent.gold} />
         </View>
+      ) : errored ? (
+        <LoadErrorState title="Couldn't load your activities." onRetry={load} />
       ) : isEmpty ? (
         <EmptyState onPress={startNew} />
       ) : (

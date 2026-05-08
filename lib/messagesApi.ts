@@ -142,10 +142,7 @@ export async function listConversations(
     .select(CONVERSATION_SELECT)
     .or(`participant_a.eq.${userId},participant_b.eq.${userId}`);
 
-  if (error) {
-    console.warn('[messages] list conversations failed', error.message);
-    return [];
-  }
+  if (error) throw error;
 
   const rows = (data ?? []) as unknown as ConversationRow[];
   if (rows.length === 0) return [];
@@ -276,10 +273,7 @@ export async function listIncomingRequests(
     .eq('status', 'pending')
     .order('created_at', { ascending: false });
 
-  if (error) {
-    console.warn('[messages] list incoming failed', error.message);
-    return [];
-  }
+  if (error) throw error;
 
   const rows = (data ?? []) as unknown as RequestRow[];
   return rows
@@ -331,7 +325,8 @@ export async function getChatContext(
     .eq('id', conversationId)
     .maybeSingle();
 
-  if (error || !data) return null;
+  if (error) throw error;
+  if (!data) return null;
   const c = data as unknown as ConversationRow;
   if (!c.activity) return null;
 
@@ -358,10 +353,7 @@ export async function listMessages(
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: true });
 
-  if (error) {
-    console.warn('[messages] list failed', error.message);
-    return [];
-  }
+  if (error) throw error;
 
   return (data ?? []).map((m) => ({
     id: m.id,

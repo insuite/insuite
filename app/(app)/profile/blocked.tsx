@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/ui/Avatar';
+import { LoadErrorState } from '@/components/ui/LoadErrorState';
 import { colors, radius, spacing, typography } from '@/constants/colors';
 import {
   listBlockedUsers,
@@ -97,28 +98,7 @@ export default function BlockedUsersScreen() {
           <ActivityIndicator color={colors.accent.gold} />
         </View>
       ) : errored ? (
-        <View style={styles.center}>
-          <Ionicons
-            name="cloud-offline-outline"
-            size={36}
-            color={colors.text.faint}
-            style={{ marginBottom: spacing.md }}
-          />
-          <Text style={styles.emptyTitle}>Couldn't load blocked users.</Text>
-          <Text style={styles.emptyBody}>
-            Check your connection and try again.
-          </Text>
-          <Pressable
-            onPress={load}
-            style={({ pressed }) => [
-              styles.retryBtn,
-              pressed && { opacity: 0.7 },
-            ]}
-            hitSlop={6}
-          >
-            <Text style={styles.retryText}>Retry</Text>
-          </Pressable>
-        </View>
+        <LoadErrorState title="Couldn't load blocked users." onRetry={load} />
       ) : users.length === 0 ? (
         <View style={styles.center}>
           <Ionicons
@@ -267,22 +247,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   unblockText: {
-    ...typography.small,
-    color: colors.accent.gold,
-    fontWeight: '600',
-  },
-  retryBtn: {
-    minWidth: 96,
-    paddingHorizontal: spacing.lg,
-    height: 36,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border.gold,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing.lg,
-  },
-  retryText: {
     ...typography.small,
     color: colors.accent.gold,
     fontWeight: '600',

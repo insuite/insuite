@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/ui/Avatar';
+import { LoadErrorState } from '@/components/ui/LoadErrorState';
 import { colors, radius, spacing, typography } from '@/constants/colors';
 import {
   getChatContext,
@@ -37,6 +38,8 @@ export default function ChatThreadScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
+  const [errored, setErrored] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
@@ -49,17 +52,25 @@ export default function ChatThreadScreen() {
 
     let cancelled = false;
     (async () => {
-      const [ctx, initial] = await Promise.all([
-        getChatContext(id, userId),
-        listMessages(id, userId),
-      ]);
-      if (cancelled) return;
-      setContext(ctx);
-      setMessages(initial);
-      setLoading(false);
-      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 50);
-      // Mark this conversation read for the current user.
-      void markConversationRead(id);
+      setErrored(false);
+      try {
+        const [ctx, initial] = await Promise.all([
+          getChatContext(id, userId),
+          listMessages(id, userId),
+        ]);
+        if (cancelled) return;
+        setContext(ctx);
+        setMessages(initial);
+        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 50);
+        // Mark this conversation read for the current user.
+        void markConversationRead(id);
+      } catch (err: any) {
+        if (cancelled) return;
+        console.warn('[chat] load failed', err?.message ?? err);
+        setErrored(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
 
     const unsubscribe = subscribeToMessages(id, userId, (msg) => {
@@ -80,7 +91,12 @@ export default function ChatThreadScreen() {
       cancelled = true;
       unsubscribe();
     };
-  }, [id, userId]);
+  }, [id, userId, retryNonce]);
+
+  const retryLoad = () => {
+    setLoading(true);
+    setRetryNonce((n) => n + 1);
+  };
 
   if (!id || !user) {
     return (
@@ -109,6 +125,21 @@ export default function ChatThreadScreen() {
         <View style={styles.center}>
           <ActivityIndicator color={colors.accent.gold} />
         </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (errored) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <NavBar
+          title="Chat"
+          initial="?"
+          avatarUri={null}
+          context=""
+          onBack={() => router.back()}
+        />
+        <LoadErrorState title="Couldn't load messages." onRetry={retryLoad} />
       </SafeAreaView>
     );
   }

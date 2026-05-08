@@ -17,6 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/ui/Avatar';
+import { LoadErrorState } from '@/components/ui/LoadErrorState';
 import { colors, radius, spacing, typography } from '@/constants/colors';
 import { type PlaceholderActivity } from '@/constants/placeholderActivities';
 import { venueFilters, venueMap, type VenueKey } from '@/constants/venues';
@@ -34,6 +35,7 @@ export default function DiscoverScreen() {
   const [filter, setFilter] = useState<FilterKey>('all');
   const [activities, setActivities] = useState<PlaceholderActivity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errored, setErrored] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [bannerVisible, setBannerVisible] = useState(false);
   // null = "All cities", otherwise filter activities to this city.
@@ -100,9 +102,16 @@ export default function DiscoverScreen() {
   // User-initiated refresh path — no race protection needed since the user
   // is on the screen waiting for it.
   const load = useCallback(async () => {
-    const list = await listActivities(user?.id);
-    setActivities(list);
-    setLoading(false);
+    setErrored(false);
+    try {
+      const list = await listActivities(user?.id);
+      setActivities(list);
+    } catch (err: any) {
+      console.warn('[discover] list failed', err?.message ?? err);
+      setErrored(true);
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
 
   // Focus-effect path uses a cancelled flag so a stale fetch (e.g. from a
@@ -111,10 +120,18 @@ export default function DiscoverScreen() {
     useCallback(() => {
       let cancelled = false;
       (async () => {
-        const list = await listActivities(user?.id);
-        if (cancelled) return;
-        setActivities(list);
-        setLoading(false);
+        setErrored(false);
+        try {
+          const list = await listActivities(user?.id);
+          if (cancelled) return;
+          setActivities(list);
+        } catch (err: any) {
+          if (cancelled) return;
+          console.warn('[discover] list failed', err?.message ?? err);
+          setErrored(true);
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
       })();
       return () => {
         cancelled = true;
@@ -237,6 +254,10 @@ export default function DiscoverScreen() {
         {loading ? (
           <View style={styles.emptyState}>
             <ActivityIndicator color={colors.accent.gold} />
+          </View>
+        ) : errored ? (
+          <View style={styles.errorWrap}>
+            <LoadErrorState title="Couldn't load activities." onRetry={load} />
           </View>
         ) : (
           <>
@@ -702,6 +723,10 @@ const styles = StyleSheet.create({
   emptyState: {
     paddingTop: spacing.xxl,
     alignItems: 'center',
+  },
+  errorWrap: {
+    minHeight: 280,
+    paddingTop: spacing.xxl,
   },
   emptyText: {
     ...typography.body,

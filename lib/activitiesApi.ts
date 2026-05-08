@@ -269,10 +269,7 @@ export async function listActivities(
     .order('date')
     .order('time_from');
 
-  if (error) {
-    console.warn('[activities] list failed', error.message);
-    return [];
-  }
+  if (error) throw error;
   return ((data ?? []) as unknown as ActivityRow[])
     .map(rowToActivity)
     .filter((x): x is PlaceholderActivity => x !== null);
@@ -294,10 +291,7 @@ export async function listMyActivities(
     .order('date', { ascending: false })
     .order('time_from', { ascending: false });
 
-  if (error) {
-    console.warn('[activities] my list failed', error.message);
-    return [];
-  }
+  if (error) throw error;
   return ((data ?? []) as unknown as ActivityRow[])
     .map(rowToActivity)
     .filter((x): x is PlaceholderActivity => x !== null);
@@ -320,10 +314,7 @@ async function listJoinedByStatus(
     .eq('requester_id', userId)
     .eq('status', status);
 
-  if (error) {
-    console.warn('[activities] joined-by-status failed', error.message);
-    return [];
-  }
+  if (error) throw error;
 
   type JoinRow = { activity: ActivityRow | null };
   return ((data ?? []) as unknown as JoinRow[])
@@ -351,10 +342,7 @@ export async function getActivity(id: string): Promise<PlaceholderActivity | nul
     .eq('id', id)
     .maybeSingle();
 
-  if (error) {
-    console.warn('[activities] get failed', error.message);
-    return null;
-  }
+  if (error) throw error;
   if (!data) return null;
   return rowToActivity(data as unknown as ActivityRow);
 }
@@ -450,10 +438,7 @@ export async function getMyJoinRequest(
     .eq('requester_id', session.user.id)
     .maybeSingle();
 
-  if (error) {
-    console.warn('[join_requests] my-state failed', error.message);
-    return { exists: false };
-  }
+  if (error) throw error;
   if (!data) return { exists: false };
   return { exists: true, status: data.status as JoinRequestStatus };
 }
@@ -492,10 +477,7 @@ export async function listJoinedGuests(
     .eq('activity_id', activityId)
     .eq('status', 'accepted');
 
-  if (error) {
-    console.warn('[join_requests] joined-guests failed', error.message);
-    return [];
-  }
+  if (error) throw error;
 
   type Row = { requester: { id: string; first_name: string; avatar_url: string | null } | null };
   return ((data ?? []) as unknown as Row[])

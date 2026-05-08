@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LoadErrorState } from '@/components/ui/LoadErrorState';
 import { colors, radius, spacing, typography } from '@/constants/colors';
 import { listMyReferrals, type MyReferral } from '@/lib/referralsApi';
 import { useAuth } from '@/stores/authStore';
@@ -24,16 +25,25 @@ export default function ReferralScreen() {
 
   const [referrals, setReferrals] = useState<MyReferral[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errored, setErrored] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) {
       setReferrals([]);
+      setErrored(false);
       setLoading(false);
       return;
     }
-    const list = await listMyReferrals(user.id);
-    setReferrals(list);
-    setLoading(false);
+    setErrored(false);
+    try {
+      const list = await listMyReferrals(user.id);
+      setReferrals(list);
+    } catch (err: any) {
+      console.warn('[referrals] list failed', err?.message ?? err);
+      setErrored(true);
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
 
   useFocusEffect(
@@ -110,6 +120,10 @@ export default function ReferralScreen() {
       {loading ? (
         <View style={styles.loadingWrap}>
           <ActivityIndicator color={colors.accent.gold} />
+        </View>
+      ) : errored ? (
+        <View style={styles.errorWrap}>
+          <LoadErrorState title="Couldn't load referrals." onRetry={load} />
         </View>
       ) : referrals.length === 0 ? (
         <Text style={styles.emptyText}>
@@ -338,6 +352,9 @@ const styles = StyleSheet.create({
   loadingWrap: {
     paddingVertical: spacing.lg,
     alignItems: 'center',
+  },
+  errorWrap: {
+    minHeight: 240,
   },
   emptyText: {
     ...typography.body,

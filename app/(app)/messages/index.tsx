@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/ui/Avatar';
+import { LoadErrorState } from '@/components/ui/LoadErrorState';
 import { colors, radius, spacing, typography } from '@/constants/colors';
 import {
   acceptRequest,
@@ -34,6 +35,7 @@ export default function MessagesScreen() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [requests, setRequests] = useState<IncomingRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errored, setErrored] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [actingOn, setActingOn] = useState<string | null>(null);
   // Synchronous lock — `actingOn` updates async via setState, so two rapid
@@ -45,20 +47,28 @@ export default function MessagesScreen() {
     if (!user) {
       setConversations([]);
       setRequests([]);
+      setErrored(false);
       setLoading(false);
       return;
     }
-    const [convos, reqs] = await Promise.all([
-      listConversations(user.id),
-      listIncomingRequests(user.id),
-    ]);
-    setConversations(convos);
-    setRequests(reqs);
-    notificationsStore.set({
-      pendingRequestsCount: reqs.length,
-      unreadConversationsCount: convos.filter((c) => c.unread).length,
-    });
-    setLoading(false);
+    setErrored(false);
+    try {
+      const [convos, reqs] = await Promise.all([
+        listConversations(user.id),
+        listIncomingRequests(user.id),
+      ]);
+      setConversations(convos);
+      setRequests(reqs);
+      notificationsStore.set({
+        pendingRequestsCount: reqs.length,
+        unreadConversationsCount: convos.filter((c) => c.unread).length,
+      });
+    } catch (err: any) {
+      console.warn('[messages] list failed', err?.message ?? err);
+      setErrored(true);
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
 
   useFocusEffect(
@@ -118,6 +128,8 @@ export default function MessagesScreen() {
         <View style={styles.center}>
           <ActivityIndicator color={colors.accent.gold} />
         </View>
+      ) : errored ? (
+        <LoadErrorState title="Couldn't load messages." onRetry={load} />
       ) : isEmpty ? (
         <View style={styles.empty}>
           <View style={styles.emptyIconWrap}>

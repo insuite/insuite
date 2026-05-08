@@ -500,12 +500,12 @@ const styles = StyleSheet.create({
   },
   filterScroll: {
     flexGrow: 0,
-    height: 60,
     marginBottom: spacing.md,
   },
   filterRow: {
     gap: spacing.sm,
     paddingHorizontal: spacing.xl,
+    paddingVertical: 11,
     alignItems: 'center',
   },
   filterChip: {

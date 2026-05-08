@@ -175,6 +175,7 @@ export default function HotelStep() {
           data={filtered}
           keyExtractor={(h) => h.id}
           keyboardShouldPersistTaps="handled"
+          style={styles.listWrap}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => {
             const selected = draft.hotelId === item.id;
@@ -424,13 +425,13 @@ const styles = StyleSheet.create({
   },
   cityChipsScroll: {
     flexGrow: 0,
-    height: 60,
     marginBottom: spacing.sm,
     marginHorizontal: -spacing.xl,
   },
   cityChipsRow: {
     gap: spacing.sm,
     paddingHorizontal: spacing.xl,
+    paddingVertical: 11,
     alignItems: 'center',
   },
   cityChip: {
@@ -471,6 +472,9 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.text.primary,
     fontSize: 16,
+  },
+  listWrap: {
+    flex: 1,
   },
   list: {
     paddingBottom: spacing.xxl,

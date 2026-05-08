@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -27,6 +27,7 @@ import {
   type ChatContext,
   type ChatMessage,
 } from '@/lib/messagesApi';
+import { isBlocked, unblockUser } from '@/lib/moderationApi';
 import { useAuth } from '@/stores/authStore';
 
 export default function ChatThreadScreen() {
@@ -41,6 +42,8 @@ export default function ChatThreadScreen() {
   const [errored, setErrored] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
   const [sending, setSending] = useState(false);
+  const [iBlockedThem, setIBlockedThem] = useState(false);
+  const [unblocking, setUnblocking] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   // Depend on user.id (primitive), not the user object — avoids tearing down
@@ -64,6 +67,11 @@ export default function ChatThreadScreen() {
         setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 50);
         // Mark this conversation read for the current user.
         void markConversationRead(id);
+        // Block status — drives the input-vs-banner swap below.
+        if (ctx) {
+          const blocked = await isBlocked(ctx.other.id);
+          if (!cancelled) setIBlockedThem(blocked);
+        }
       } catch (err: any) {
         if (cancelled) return;
         console.warn('[chat] load failed', err?.message ?? err);
@@ -96,6 +104,48 @@ export default function ChatThreadScreen() {
   const retryLoad = () => {
     setLoading(true);
     setRetryNonce((n) => n + 1);
+  };
+
+  // Re-check the block flag whenever the user returns to this screen — they
+  // may have just blocked / unblocked the other party from /user/[id].
+  // Cheap single-row query, so safe to fire every focus.
+  const otherId = context?.other.id;
+  useFocusEffect(
+    useCallback(() => {
+      if (!otherId) return;
+      let cancelled = false;
+      isBlocked(otherId).then((blocked) => {
+        if (!cancelled) setIBlockedThem(blocked);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [otherId]),
+  );
+
+  const askUnblock = () => {
+    if (!context || unblocking) return;
+    Alert.alert(
+      `Unblock ${context.other.firstName}?`,
+      'They will be able to see your activities again. You can re-block them at any time.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unblock',
+          onPress: async () => {
+            setUnblocking(true);
+            try {
+              await unblockUser(context.other.id);
+              setIBlockedThem(false);
+            } catch (err: any) {
+              Alert.alert('Could not unblock', err?.message ?? 'Please try again.');
+            } finally {
+              setUnblocking(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   if (!id || !user) {
@@ -236,36 +286,64 @@ export default function ChatThreadScreen() {
           )}
         </ScrollView>
 
-        <View style={styles.inputBar}>
-          <TextInput
-            value={draft}
-            onChangeText={setDraft}
-            placeholder="Write a message…"
-            placeholderTextColor={colors.text.faint}
-            style={styles.input}
-            multiline
-          />
-          <Pressable
-            onPress={send}
-            disabled={!draft.trim() || sending}
-            style={[
-              styles.sendBtn,
-              (!draft.trim() || sending) && styles.sendBtnDisabled,
-            ]}
-          >
-            {sending ? (
-              <ActivityIndicator color={colors.accent.goldDark} />
-            ) : (
-              <Ionicons
-                name="arrow-up"
-                size={18}
-                color={
-                  !draft.trim() ? colors.text.faint : colors.accent.goldDark
-                }
-              />
-            )}
-          </Pressable>
-        </View>
+        {iBlockedThem ? (
+          <View style={styles.blockedBar}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.blockedTitle}>
+                You've blocked {context.other.firstName}.
+              </Text>
+              <Text style={styles.blockedBody}>
+                Unblock to send messages.
+              </Text>
+            </View>
+            <Pressable
+              onPress={askUnblock}
+              disabled={unblocking}
+              style={({ pressed }) => [
+                styles.unblockBtn,
+                pressed && !unblocking && { opacity: 0.7 },
+              ]}
+              hitSlop={6}
+            >
+              {unblocking ? (
+                <ActivityIndicator color={colors.accent.gold} size="small" />
+              ) : (
+                <Text style={styles.unblockText}>Unblock</Text>
+              )}
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.inputBar}>
+            <TextInput
+              value={draft}
+              onChangeText={setDraft}
+              placeholder="Write a message…"
+              placeholderTextColor={colors.text.faint}
+              style={styles.input}
+              multiline
+            />
+            <Pressable
+              onPress={send}
+              disabled={!draft.trim() || sending}
+              style={[
+                styles.sendBtn,
+                (!draft.trim() || sending) && styles.sendBtnDisabled,
+              ]}
+            >
+              {sending ? (
+                <ActivityIndicator color={colors.accent.goldDark} />
+              ) : (
+                <Ionicons
+                  name="arrow-up"
+                  size={18}
+                  color={
+                    !draft.trim() ? colors.text.faint : colors.accent.goldDark
+                  }
+                />
+              )}
+            </Pressable>
+          </View>
+        )}
       </KeyboardAvoidingView>
 
     </SafeAreaView>
@@ -454,6 +532,41 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: {
     backgroundColor: colors.border.default,
+  },
+  blockedBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border.subtle,
+    backgroundColor: colors.bg.secondary,
+  },
+  blockedTitle: {
+    ...typography.body,
+    color: colors.text.primary,
+    fontWeight: '500',
+  },
+  blockedBody: {
+    ...typography.small,
+    color: colors.text.muted,
+    marginTop: 2,
+  },
+  unblockBtn: {
+    minWidth: 84,
+    paddingHorizontal: spacing.md,
+    height: 36,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unblockText: {
+    ...typography.small,
+    color: colors.accent.gold,
+    fontWeight: '600',
   },
   missing: {
     flex: 1,

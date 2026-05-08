@@ -90,6 +90,23 @@ async function applySession(session: Session | null) {
   }
 
   if (!profile) {
+    // No profile row could mean (a) brand-new user who hasn't onboarded yet,
+    // or (b) the auth.users row this session points to was deleted out from
+    // under us — Dashboard delete, an account-deletion RPC that didn't get
+    // a chance to signOut, etc. Disambiguate by hitting the server-side
+    // `getUser()` (unlike `getSession()`, this validates the JWT against the
+    // live users table). If invalid, signOut so the auth gate routes back to
+    // Welcome instead of stranding the user in onboarding with an FK that
+    // will fail at the final profile upsert.
+    const { error: validateErr } = await supabase.auth.getUser();
+    if (validateErr) {
+      console.warn(
+        '[authStore] session points to a missing auth user, signing out:',
+        validateErr.message,
+      );
+      await supabase.auth.signOut();
+      return;
+    }
     set({ status: 'needsOnboarding' });
     return;
   }

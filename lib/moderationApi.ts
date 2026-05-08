@@ -41,6 +41,53 @@ export async function unblockUser(blockedUserId: string): Promise<void> {
   if (error) throw error;
 }
 
+export interface BlockedUser {
+  id: string;
+  firstName: string;
+  avatarUri: string | null;
+  blockedAt: string;
+}
+
+/**
+ * Everyone the caller has blocked, most-recently-blocked first. Used by
+ * the Blocked users management screen.
+ */
+export async function listBlockedUsers(): Promise<BlockedUser[]> {
+  if (!isSupabaseConfigured || !supabase) return [];
+  const { data: userData } = await supabase.auth.getUser();
+  const me = userData.user?.id;
+  if (!me) return [];
+
+  const { data, error } = await supabase
+    .from('blocks')
+    .select(
+      `blocked_id, created_at,
+       blocked:profiles!blocks_blocked_id_fkey(first_name, avatar_url)`,
+    )
+    .eq('blocker_id', me)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.warn('[moderation] list blocks failed', error.message);
+    return [];
+  }
+
+  type Row = {
+    blocked_id: string;
+    created_at: string;
+    blocked: { first_name: string; avatar_url: string | null } | null;
+  };
+
+  return ((data ?? []) as unknown as Row[])
+    .filter((r) => r.blocked != null)
+    .map((r) => ({
+      id: r.blocked_id,
+      firstName: r.blocked!.first_name,
+      avatarUri: r.blocked!.avatar_url,
+      blockedAt: r.created_at,
+    }));
+}
+
 /**
  * Whether the caller has blocked the given user. Used by UI to flip the
  * Block button into an Unblock state.

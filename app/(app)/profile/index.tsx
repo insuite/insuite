@@ -229,6 +229,11 @@ export default function ProfileScreen() {
           label="Redeem a code"
           onPress={() => router.push('/plans/redeem')}
         />
+        <MenuRow
+          icon="ban-outline"
+          label="Blocked users"
+          onPress={() => router.push('/profile/blocked')}
+        />
         <MenuRow icon="notifications-outline" label="Notifications" />
         <MenuRow icon="help-circle-outline" label="Help & support" />
 

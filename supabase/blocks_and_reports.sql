@@ -120,16 +120,17 @@ create policy "messages visible minus blocks"
     )
   );
 
--- Profiles: hide blocked users from each other's lookup so a tap on
--- their avatar (e.g. from an old chat thread) returns "not found"
--- rather than the original profile.
+-- Profiles: a profile is hidden from the caller only when the other
+-- party blocked the caller. Profiles the caller has blocked stay
+-- visible to the caller so they can find and unblock them from the
+-- Blocked users list. Caller can always see their own profile.
 drop policy if exists "profiles readable by authenticated" on profiles;
 drop policy if exists "profiles readable minus blocks"     on profiles;
 create policy "profiles readable minus blocks"
   on profiles for select to authenticated using (
-    not exists (
+    auth.uid() = profiles.id
+    or not exists (
       select 1 from blocks b
-      where (b.blocker_id = auth.uid() and b.blocked_id = profiles.id)
-         or (b.blocker_id = profiles.id and b.blocked_id = auth.uid())
+      where b.blocker_id = profiles.id and b.blocked_id = auth.uid()
     )
   );

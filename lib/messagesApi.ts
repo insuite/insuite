@@ -438,8 +438,19 @@ export function subscribeToMessages(
   onNew: (msg: ChatMessage) => void,
 ): () => void {
   if (!isSupabaseConfigured || !supabase) return () => {};
+  // Use a unique topic per call rather than `conv:${conversationId}`.
+  // Supabase JS caches channels by topic, so two fast remounts of the
+  // chat thread (e.g. tapping a message push that re-opens the same
+  // thread) would both grab the same cached channel — but the second
+  // call would try to attach a `postgres_changes` listener after
+  // `.subscribe()` had already fired on the first, which throws.
+  // A unique topic gives each mount its own fresh channel; cleanup
+  // removes it by reference and the old one drops naturally.
+  const topic = `conv:${conversationId}:${Date.now().toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
   const channel = supabase
-    .channel(`conv:${conversationId}`)
+    .channel(topic)
     .on(
       'postgres_changes',
       {

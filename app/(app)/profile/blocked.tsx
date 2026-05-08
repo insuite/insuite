@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -24,21 +24,38 @@ export default function BlockedUsersScreen() {
   const router = useRouter();
   const [users, setUsers] = useState<BlockedUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errored, setErrored] = useState(false);
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
+  // Shared cancel flag for whichever load() is currently in flight — focus
+  // effect or Retry. Reset on each focus so a Retry triggered after blur
+  // can't apply state to an unmounted screen.
+  const cancelRef = useRef({ cancelled: false });
+
+  const load = useCallback(async () => {
+    const signal = cancelRef.current;
+    setLoading(true);
+    setErrored(false);
+    try {
+      const list = await listBlockedUsers();
+      if (signal.cancelled) return;
+      setUsers(list);
+    } catch (err: any) {
+      if (signal.cancelled) return;
+      console.warn('[blocked] list failed', err?.message ?? err);
+      setErrored(true);
+    } finally {
+      if (!signal.cancelled) setLoading(false);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
-      setLoading(true);
-      listBlockedUsers().then((list) => {
-        if (cancelled) return;
-        setUsers(list);
-        setLoading(false);
-      });
+      cancelRef.current = { cancelled: false };
+      load();
       return () => {
-        cancelled = true;
+        cancelRef.current.cancelled = true;
       };
-    }, []),
+    }, [load]),
   );
 
   const askUnblock = (target: BlockedUser) => {
@@ -78,6 +95,29 @@ export default function BlockedUsersScreen() {
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.accent.gold} />
+        </View>
+      ) : errored ? (
+        <View style={styles.center}>
+          <Ionicons
+            name="cloud-offline-outline"
+            size={36}
+            color={colors.text.faint}
+            style={{ marginBottom: spacing.md }}
+          />
+          <Text style={styles.emptyTitle}>Couldn't load blocked users.</Text>
+          <Text style={styles.emptyBody}>
+            Check your connection and try again.
+          </Text>
+          <Pressable
+            onPress={load}
+            style={({ pressed }) => [
+              styles.retryBtn,
+              pressed && { opacity: 0.7 },
+            ]}
+            hitSlop={6}
+          >
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
         </View>
       ) : users.length === 0 ? (
         <View style={styles.center}>
@@ -227,6 +267,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   unblockText: {
+    ...typography.small,
+    color: colors.accent.gold,
+    fontWeight: '600',
+  },
+  retryBtn: {
+    minWidth: 96,
+    paddingHorizontal: spacing.lg,
+    height: 36,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.lg,
+  },
+  retryText: {
     ...typography.small,
     color: colors.accent.gold,
     fontWeight: '600',

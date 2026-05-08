@@ -9,7 +9,7 @@ import {
 import type { VenueKey } from '@/constants/venues';
 import type { ActivityDraft } from '@/stores/activityDraftStore';
 
-import { isSupabaseConfigured, supabase } from './supabase';
+import { isSupabaseConfigured, supabase, type Database } from './supabase';
 
 export interface CitySummary {
   city: string;
@@ -366,7 +366,7 @@ export async function updateActivity(
   patch: UpdateActivityPatch,
 ): Promise<void> {
   if (!isSupabaseConfigured || !supabase) return;
-  const dbPatch: Record<string, unknown> = {};
+  const dbPatch: Database['public']['Tables']['activities']['Update'] = {};
   if (patch.date !== undefined) dbPatch.date = patch.date;
   if (patch.timeFrom !== undefined) dbPatch.time_from = patch.timeFrom;
   if (patch.timeTo !== undefined) dbPatch.time_to = patch.timeTo;

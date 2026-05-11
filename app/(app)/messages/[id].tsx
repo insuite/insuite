@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -243,6 +244,7 @@ export default function ChatThreadScreen() {
   const send = async () => {
     const text = draft.trim();
     if (!text || sending) return;
+    Haptics.selectionAsync().catch(() => {});
     setSending(true);
     setDraft('');
     try {

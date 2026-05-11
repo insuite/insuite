@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -89,6 +90,9 @@ export default function ConfirmStep() {
     setPublishing(true);
     try {
       const newId = await createActivity(draft);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+        () => {},
+      );
       activityDraft.reset();
       // Land on the activity's detail page rather than the list — the user
       // just put work into composing this; surfacing it directly lets them

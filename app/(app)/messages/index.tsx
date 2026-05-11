@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
@@ -89,6 +90,9 @@ export default function MessagesScreen() {
     setActingOn(req.id);
     try {
       await acceptRequest(req.id);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+        () => {},
+      );
       await load();
     } catch (err: any) {
       Alert.alert('Could not accept', err?.message ?? 'Please try again.');

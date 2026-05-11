@@ -209,10 +209,33 @@ export default function HotelStep() {
               <Text style={styles.emptyText}>
                 {query ? `No hotels match "${query}".` : 'No hotels yet.'}
               </Text>
-              <Pressable onPress={() => setRequestOpen(true)} hitSlop={6}>
-                <Text style={styles.requestLink}>Request to add a hotel</Text>
-              </Pressable>
             </View>
+          }
+          ListFooterComponent={
+            <Pressable
+              onPress={() => setRequestOpen(true)}
+              style={({ pressed }) => [
+                styles.requestFooter,
+                pressed && styles.rowPressed,
+              ]}
+            >
+              <View style={styles.requestFooterIcon}>
+                <Ionicons name="add" size={18} color={colors.accent.gold} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.requestFooterTitle}>
+                  Request to add a hotel
+                </Text>
+                <Text style={styles.requestFooterSub}>
+                  Don't see yours? We'll review and add it.
+                </Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={colors.text.faint}
+              />
+            </Pressable>
           }
         />
       )}
@@ -519,9 +542,36 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.muted,
   },
-  requestLink: {
+  requestFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    backgroundColor: colors.bg.secondary,
+    marginTop: spacing.md,
+  },
+  requestFooterIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  requestFooterTitle: {
     ...typography.body,
-    color: colors.accent.gold,
+    color: colors.text.primary,
+    fontWeight: '500',
+  },
+  requestFooterSub: {
+    ...typography.small,
+    color: colors.text.muted,
+    marginTop: 2,
   },
   modalContainer: {
     flex: 1,

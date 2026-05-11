@@ -3,7 +3,7 @@ import { useSyncExternalStore } from 'react';
 
 import type { VenueKey } from '@/constants/venues';
 import {
-  registerForPushNotifications,
+  registerIfAlreadyGranted,
   unregisterPushNotifications,
 } from '@/lib/notifications';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
@@ -122,9 +122,11 @@ async function applySession(session: Session | null) {
   });
   set({ status: 'ready' });
   void notificationsStore.refresh(session.user.id);
-  // Register for push asynchronously — first-run will trigger the iOS
-  // permission prompt. Subsequent sign-ins are a no-op if already granted.
-  void registerForPushNotifications(session.user.id);
+  // Re-register the push token IF permission was already granted in a previous
+  // session. New users get the system prompt via the PushPrimingSheet on
+  // Discover instead — that way we can prime them with our own copy first
+  // (Apple HIG recommends explaining the "why" before the system dialog).
+  void registerIfAlreadyGranted(session.user.id);
 }
 
 function generateReferralCode(name: string): string {

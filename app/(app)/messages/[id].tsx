@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActionSheetIOS,
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
@@ -15,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ReportSheet } from '@/components/moderation/ReportSheet';
 import { Avatar } from '@/components/ui/Avatar';
 import { LoadErrorState } from '@/components/ui/LoadErrorState';
 import { colors, radius, spacing, typography } from '@/constants/colors';
@@ -44,6 +46,7 @@ export default function ChatThreadScreen() {
   const [sending, setSending] = useState(false);
   const [iBlockedThem, setIBlockedThem] = useState(false);
   const [unblocking, setUnblocking] = useState(false);
+  const [reportMessageId, setReportMessageId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
   // Depend on user.id (primitive), not the user object — avoids tearing down
@@ -122,6 +125,32 @@ export default function ChatThreadScreen() {
       };
     }, [otherId]),
   );
+
+  const onLongPressMessage = (msg: ChatMessage) => {
+    // You can't report your own message — there's nothing to flag from the
+    // platform's POV, and the obvious "report what I just typed" gesture
+    // would be confusing.
+    if (msg.fromMe) return;
+    const openReport = () => setReportMessageId(msg.id);
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Report message', 'Cancel'],
+          destructiveButtonIndex: 0,
+          cancelButtonIndex: 1,
+          userInterfaceStyle: 'dark',
+        },
+        (i) => {
+          if (i === 0) openReport();
+        },
+      );
+    } else {
+      Alert.alert('Message', undefined, [
+        { text: 'Report message', style: 'destructive', onPress: openReport },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    }
+  };
 
   const askUnblock = () => {
     if (!context || unblocking) return;
@@ -265,10 +294,13 @@ export default function ChatThreadScreen() {
               return (
                 <View key={m.id} style={{ width: '100%' }}>
                   {showTime && <Text style={styles.timestamp}>{time}</Text>}
-                  <View
-                    style={[
+                  <Pressable
+                    onLongPress={() => onLongPressMessage(m)}
+                    delayLongPress={350}
+                    style={({ pressed }) => [
                       styles.bubble,
                       m.fromMe ? styles.bubbleMe : styles.bubbleThem,
+                      pressed && !m.fromMe && { opacity: 0.7 },
                     ]}
                   >
                     <Text
@@ -279,7 +311,7 @@ export default function ChatThreadScreen() {
                     >
                       {m.text}
                     </Text>
-                  </View>
+                  </Pressable>
                 </View>
               );
             })
@@ -346,6 +378,14 @@ export default function ChatThreadScreen() {
         )}
       </KeyboardAvoidingView>
 
+      {reportMessageId && (
+        <ReportSheet
+          visible
+          target={{ messageId: reportMessageId }}
+          title={`Report message`}
+          onClose={() => setReportMessageId(null)}
+        />
+      )}
     </SafeAreaView>
   );
 }

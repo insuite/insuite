@@ -405,8 +405,16 @@ export function subscribeToInbox(
   onUpdate: () => void,
 ): () => void {
   if (!isSupabaseConfigured || !supabase) return () => {};
+  // Per-call unique topic — same reason as subscribeToMessages. Tapping a
+  // push notification can fast-remount the tab layout while the previous
+  // subscription is still in flight; supabase-js caches by topic and would
+  // hand back the already-subscribed channel, then throw because postgres
+  // listeners can't be attached after `.subscribe()`.
+  const topic = `inbox:${userId}:${Date.now().toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
   const channel = supabase
-    .channel(`inbox:${userId}`)
+    .channel(topic)
     .on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'messages' },

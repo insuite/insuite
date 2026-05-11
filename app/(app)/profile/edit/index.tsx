@@ -24,18 +24,19 @@ export default function EditProfileMenu() {
   const router = useRouter();
   const profile = useProfile();
 
-  const langPreview =
-    profile.languages.length === 0
-      ? 'None'
-      : profile.languages
-          .map((code) => languageMap[code]?.name ?? code)
-          .join(', ');
+  const langEmpty = profile.languages.length === 0;
+  const langPreview = langEmpty
+    ? 'Add languages you speak'
+    : profile.languages
+        .map((code) => languageMap[code]?.name ?? code)
+        .join(', ');
 
-  const openToPreview =
-    profile.openTo.length === 0
-      ? 'None'
-      : profile.openTo.map((k) => venueMap[k].label).join(', ');
+  const openToEmpty = profile.openTo.length === 0;
+  const openToPreview = openToEmpty
+    ? "Pick what you're open to"
+    : profile.openTo.map((k) => venueMap[k].label).join(', ');
 
+  // Vibe is genuinely optional, so "None" stays passive (no gold action copy).
   const vibePreview =
     profile.vibeTags.length === 0 ? 'None' : profile.vibeTags.join(', ');
 
@@ -147,12 +148,14 @@ export default function EditProfileMenu() {
           icon="language-outline"
           label="Languages"
           value={langPreview}
+          placeholder={langEmpty}
           onPress={() => router.push('/profile/edit/languages')}
         />
         <EditRow
           icon="sparkles-outline"
           label="Open to"
           value={openToPreview}
+          placeholder={openToEmpty}
           onPress={() => router.push('/profile/edit/activities')}
         />
         <EditRow

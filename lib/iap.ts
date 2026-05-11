@@ -1,6 +1,7 @@
 import {
   endConnection,
   finishTransaction,
+  getAvailablePurchases,
   initConnection,
   purchaseErrorListener,
   purchaseUpdatedListener,
@@ -96,6 +97,34 @@ export async function buyPass(productId: PassProductId): Promise<void> {
 export interface PurchaseHandlers {
   onPurchase: (purchase: Purchase) => Promise<void> | void;
   onError: (err: PurchaseError) => void;
+}
+
+/**
+ * Apple App Store Guideline 3.1.1 requires a working Restore Purchases
+ * affordance even for consumable IAPs. For our consumable passes, "restore"
+ * means: re-deliver any StoreKit transaction that was paid for but never
+ * got finished on our side (e.g. the app crashed between purchase and
+ * `finishTransaction`, or `insertPass` threw on the server side mid-flow).
+ *
+ * `alsoPublishToEventListener: true` re-fires those purchases through the
+ * existing `purchaseUpdatedListener` registered by `subscribePurchaseUpdates`,
+ * so the Plans page's onPurchase handler processes them with no extra wiring.
+ *
+ * Returns how many purchases were found (0 = nothing to restore — show the
+ * user that explicitly so the button doesn't feel broken).
+ */
+export async function restorePasses(): Promise<{ restored: number }> {
+  const ok = await initIAP();
+  if (!ok) return { restored: 0 };
+  try {
+    const purchases = await getAvailablePurchases({
+      alsoPublishToEventListener: true,
+    });
+    return { restored: purchases.length };
+  } catch (err) {
+    console.warn('[iap] restore failed', err);
+    throw err;
+  }
 }
 
 /**

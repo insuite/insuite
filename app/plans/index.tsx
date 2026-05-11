@@ -18,6 +18,7 @@ import {
   fetchPassProducts,
   PASS_DURATION_DAYS,
   PASS_TYPE_FOR_DB,
+  restorePasses,
   subscribePurchaseUpdates,
   type PassProductId,
 } from '@/lib/iap';
@@ -46,6 +47,7 @@ export default function PlansScreen() {
   const [prices, setPrices] = useState<Record<string, string>>({});
   const [activePass, setActivePass] = useState<Pass | null>(null);
   const [purchasing, setPurchasing] = useState<PassProductId | null>(null);
+  const [restoring, setRestoring] = useState(false);
 
   // Fetch the user's active pass on focus.
   useFocusEffect(
@@ -121,6 +123,29 @@ export default function PlansScreen() {
     } catch (err: any) {
       setPurchasing(null);
       Alert.alert('Could not start purchase', err?.message ?? 'Please try again.');
+    }
+  };
+
+  const onRestore = async () => {
+    if (restoring) return;
+    setRestoring(true);
+    try {
+      const { restored } = await restorePasses();
+      // When restored > 0, expo-iap re-fires each unfinished purchase through
+      // the existing purchaseUpdatedListener (subscribePurchaseUpdates above),
+      // so onPurchase runs and Alert.alert('Pass activated', ...) shows up
+      // on its own — no need to alert here. We only confirm explicitly when
+      // there was nothing to restore so the button doesn't feel broken.
+      if (restored === 0) {
+        Alert.alert(
+          'Restore purchases',
+          'No previous purchases to restore on this Apple ID.',
+        );
+      }
+    } catch (err: any) {
+      Alert.alert('Restore failed', err?.message ?? 'Please try again.');
+    } finally {
+      setRestoring(false);
     }
   };
 
@@ -216,23 +241,20 @@ export default function PlansScreen() {
           <Ionicons name="chevron-forward" size={16} color={colors.text.ghost} />
         </Pressable>
 
-        <Pressable onPress={restorePlaceholder} style={styles.restoreLink} hitSlop={6}>
-          <Text style={styles.restoreLinkText}>Restore purchases</Text>
+        <Pressable
+          onPress={onRestore}
+          disabled={restoring}
+          style={styles.restoreLink}
+          hitSlop={6}
+        >
+          {restoring ? (
+            <ActivityIndicator color={colors.text.muted} size="small" />
+          ) : (
+            <Text style={styles.restoreLinkText}>Restore purchases</Text>
+          )}
         </Pressable>
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function restorePlaceholder() {
-  // react-native-iap delivers historic purchases via the same purchaseUpdated
-  // listener after calling getAvailablePurchases or simply re-initializing the
-  // connection. For consumables (our pass tiers) restore is mainly to recover
-  // a recently-completed transaction that didn't finish. Leaving as a stub
-  // until we hit an actual case where users need this.
-  Alert.alert(
-    'Restore purchases',
-    'Consumable passes are auto-applied at purchase. If a recent purchase is missing, sign out and back in to refresh.',
   );
 }
 

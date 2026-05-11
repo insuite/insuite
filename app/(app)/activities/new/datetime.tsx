@@ -211,7 +211,7 @@ export default function DateTimeStep() {
           </ScrollView>
         )}
 
-        <Text style={styles.sectionLabel}>NOTE (optional)</Text>
+        <Text style={styles.sectionLabel}>NOTE (OPTIONAL)</Text>
         <View style={styles.noteWrap}>
           <TextInput
             value={note}

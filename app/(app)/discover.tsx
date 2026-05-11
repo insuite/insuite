@@ -16,17 +16,24 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { PushPrimingSheet } from '@/components/PushPrimingSheet';
 import { Avatar } from '@/components/ui/Avatar';
+import { LoadErrorState } from '@/components/ui/LoadErrorState';
 import { colors, radius, spacing, typography } from '@/constants/colors';
 import { type PlaceholderActivity } from '@/constants/placeholderActivities';
 import { venueFilters, venueMap, type VenueKey } from '@/constants/venues';
 import { listActivities, listCities, type CitySummary } from '@/lib/activitiesApi';
+import {
+  getPushPermissionStatus,
+  registerForPushNotifications,
+} from '@/lib/notifications';
 import { useAuth } from '@/stores/authStore';
 
 type FilterKey = VenueKey | 'all';
 
 const REFERRAL_BANNER_KEY = 'discover_referral_banner_dismissed';
 const SELECTED_CITY_KEY = 'discover_selected_city';
+const PUSH_PRIMING_KEY = 'discover_push_priming_done';
 
 export default function DiscoverScreen() {
   const router = useRouter();
@@ -34,12 +41,15 @@ export default function DiscoverScreen() {
   const [filter, setFilter] = useState<FilterKey>('all');
   const [activities, setActivities] = useState<PlaceholderActivity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errored, setErrored] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [bannerVisible, setBannerVisible] = useState(false);
   // null = "All cities", otherwise filter activities to this city.
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
   const [cities, setCities] = useState<CitySummary[]>([]);
+  const [pushPrimingVisible, setPushPrimingVisible] = useState(false);
+  const [pushAsking, setPushAsking] = useState(false);
 
   // Restore the previously-picked city across launches so the user doesn't
   // have to re-pick every time. AsyncStorage is the same one we use for the
@@ -97,12 +107,64 @@ export default function DiscoverScreen() {
     AsyncStorage.setItem(REFERRAL_BANNER_KEY, 'true').catch(() => {});
   };
 
+  // First-time-on-Discover push priming. Only show when (a) we've never asked
+  // and (b) iOS hasn't already decided. Stamp the flag on either button so
+  // the sheet never reappears (re-asking after a decline would be annoying;
+  // the user can flip it on in iOS Settings if they change their mind).
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const done = await AsyncStorage.getItem(PUSH_PRIMING_KEY);
+        if (done === 'true') return;
+        const status = await getPushPermissionStatus();
+        if (status !== 'undetermined') {
+          // Already granted/denied at OS level — nothing to prime. Stamp the
+          // flag so we skip this check on future mounts.
+          AsyncStorage.setItem(PUSH_PRIMING_KEY, 'true').catch(() => {});
+          return;
+        }
+        if (!cancelled) setPushPrimingVisible(true);
+      } catch {
+        // Don't let storage hiccups block Discover.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const onPushAllow = async () => {
+    if (!user || pushAsking) return;
+    setPushAsking(true);
+    try {
+      await registerForPushNotifications(user.id);
+    } finally {
+      setPushAsking(false);
+      setPushPrimingVisible(false);
+      AsyncStorage.setItem(PUSH_PRIMING_KEY, 'true').catch(() => {});
+    }
+  };
+
+  const onPushDecline = () => {
+    setPushPrimingVisible(false);
+    AsyncStorage.setItem(PUSH_PRIMING_KEY, 'true').catch(() => {});
+  };
+
   // User-initiated refresh path — no race protection needed since the user
   // is on the screen waiting for it.
   const load = useCallback(async () => {
-    const list = await listActivities(user?.id);
-    setActivities(list);
-    setLoading(false);
+    setErrored(false);
+    try {
+      const list = await listActivities(user?.id);
+      setActivities(list);
+    } catch (err: any) {
+      console.warn('[discover] list failed', err?.message ?? err);
+      setErrored(true);
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
 
   // Focus-effect path uses a cancelled flag so a stale fetch (e.g. from a
@@ -111,10 +173,18 @@ export default function DiscoverScreen() {
     useCallback(() => {
       let cancelled = false;
       (async () => {
-        const list = await listActivities(user?.id);
-        if (cancelled) return;
-        setActivities(list);
-        setLoading(false);
+        setErrored(false);
+        try {
+          const list = await listActivities(user?.id);
+          if (cancelled) return;
+          setActivities(list);
+        } catch (err: any) {
+          if (cancelled) return;
+          console.warn('[discover] list failed', err?.message ?? err);
+          setErrored(true);
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
       })();
       return () => {
         cancelled = true;
@@ -238,6 +308,10 @@ export default function DiscoverScreen() {
           <View style={styles.emptyState}>
             <ActivityIndicator color={colors.accent.gold} />
           </View>
+        ) : errored ? (
+          <View style={styles.errorWrap}>
+            <LoadErrorState title="Couldn't load activities." onRetry={load} />
+          </View>
         ) : (
           <>
             {feed.map((a) => (
@@ -260,6 +334,13 @@ export default function DiscoverScreen() {
           </>
         )}
       </ScrollView>
+
+      <PushPrimingSheet
+        visible={pushPrimingVisible}
+        busy={pushAsking}
+        onAllow={onPushAllow}
+        onDecline={onPushDecline}
+      />
     </SafeAreaView>
   );
 }
@@ -485,6 +566,7 @@ const styles = StyleSheet.create({
   filterRow: {
     gap: spacing.sm,
     paddingHorizontal: spacing.xl,
+    paddingVertical: 11,
     alignItems: 'center',
   },
   filterChip: {
@@ -702,6 +784,10 @@ const styles = StyleSheet.create({
   emptyState: {
     paddingTop: spacing.xxl,
     alignItems: 'center',
+  },
+  errorWrap: {
+    minHeight: 280,
+    paddingTop: spacing.xxl,
   },
   emptyText: {
     ...typography.body,

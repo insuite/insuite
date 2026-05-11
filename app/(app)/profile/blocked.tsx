@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/ui/Avatar';
+import { LoadErrorState } from '@/components/ui/LoadErrorState';
 import { colors, radius, spacing, typography } from '@/constants/colors';
 import {
   listBlockedUsers,
@@ -24,21 +25,38 @@ export default function BlockedUsersScreen() {
   const router = useRouter();
   const [users, setUsers] = useState<BlockedUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errored, setErrored] = useState(false);
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
+  // Shared cancel flag for whichever load() is currently in flight — focus
+  // effect or Retry. Reset on each focus so a Retry triggered after blur
+  // can't apply state to an unmounted screen.
+  const cancelRef = useRef({ cancelled: false });
+
+  const load = useCallback(async () => {
+    const signal = cancelRef.current;
+    setLoading(true);
+    setErrored(false);
+    try {
+      const list = await listBlockedUsers();
+      if (signal.cancelled) return;
+      setUsers(list);
+    } catch (err: any) {
+      if (signal.cancelled) return;
+      console.warn('[blocked] list failed', err?.message ?? err);
+      setErrored(true);
+    } finally {
+      if (!signal.cancelled) setLoading(false);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
-      setLoading(true);
-      listBlockedUsers().then((list) => {
-        if (cancelled) return;
-        setUsers(list);
-        setLoading(false);
-      });
+      cancelRef.current = { cancelled: false };
+      load();
       return () => {
-        cancelled = true;
+        cancelRef.current.cancelled = true;
       };
-    }, []),
+    }, [load]),
   );
 
   const askUnblock = (target: BlockedUser) => {
@@ -79,6 +97,8 @@ export default function BlockedUsersScreen() {
         <View style={styles.center}>
           <ActivityIndicator color={colors.accent.gold} />
         </View>
+      ) : errored ? (
+        <LoadErrorState title="Couldn't load blocked users." onRetry={load} />
       ) : users.length === 0 ? (
         <View style={styles.center}>
           <Ionicons

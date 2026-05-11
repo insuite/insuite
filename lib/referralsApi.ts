@@ -71,10 +71,7 @@ export async function listMyReferrals(userId: string): Promise<MyReferral[]> {
     .eq('referrer_id', userId)
     .order('created_at', { ascending: false });
 
-  if (error) {
-    console.warn('[referrals] list failed', error.message);
-    return [];
-  }
+  if (error) throw error;
 
   type Row = {
     id: string;

@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -76,6 +77,9 @@ export default function UserProfileScreen() {
           onPress: async () => {
             try {
               await blockUser(id);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(
+                () => {},
+              );
               setBlocked(true);
               router.back();
             } catch (err: any) {

@@ -142,10 +142,7 @@ export async function listConversations(
     .select(CONVERSATION_SELECT)
     .or(`participant_a.eq.${userId},participant_b.eq.${userId}`);
 
-  if (error) {
-    console.warn('[messages] list conversations failed', error.message);
-    return [];
-  }
+  if (error) throw error;
 
   const rows = (data ?? []) as unknown as ConversationRow[];
   if (rows.length === 0) return [];
@@ -276,10 +273,7 @@ export async function listIncomingRequests(
     .eq('status', 'pending')
     .order('created_at', { ascending: false });
 
-  if (error) {
-    console.warn('[messages] list incoming failed', error.message);
-    return [];
-  }
+  if (error) throw error;
 
   const rows = (data ?? []) as unknown as RequestRow[];
   return rows
@@ -331,7 +325,8 @@ export async function getChatContext(
     .eq('id', conversationId)
     .maybeSingle();
 
-  if (error || !data) return null;
+  if (error) throw error;
+  if (!data) return null;
   const c = data as unknown as ConversationRow;
   if (!c.activity) return null;
 
@@ -358,10 +353,7 @@ export async function listMessages(
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: true });
 
-  if (error) {
-    console.warn('[messages] list failed', error.message);
-    return [];
-  }
+  if (error) throw error;
 
   return (data ?? []).map((m) => ({
     id: m.id,
@@ -413,8 +405,16 @@ export function subscribeToInbox(
   onUpdate: () => void,
 ): () => void {
   if (!isSupabaseConfigured || !supabase) return () => {};
+  // Per-call unique topic — same reason as subscribeToMessages. Tapping a
+  // push notification can fast-remount the tab layout while the previous
+  // subscription is still in flight; supabase-js caches by topic and would
+  // hand back the already-subscribed channel, then throw because postgres
+  // listeners can't be attached after `.subscribe()`.
+  const topic = `inbox:${userId}:${Date.now().toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
   const channel = supabase
-    .channel(`inbox:${userId}`)
+    .channel(topic)
     .on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'messages' },
@@ -446,8 +446,19 @@ export function subscribeToMessages(
   onNew: (msg: ChatMessage) => void,
 ): () => void {
   if (!isSupabaseConfigured || !supabase) return () => {};
+  // Use a unique topic per call rather than `conv:${conversationId}`.
+  // Supabase JS caches channels by topic, so two fast remounts of the
+  // chat thread (e.g. tapping a message push that re-opens the same
+  // thread) would both grab the same cached channel — but the second
+  // call would try to attach a `postgres_changes` listener after
+  // `.subscribe()` had already fired on the first, which throws.
+  // A unique topic gives each mount its own fresh channel; cleanup
+  // removes it by reference and the old one drops naturally.
+  const topic = `conv:${conversationId}:${Date.now().toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
   const channel = supabase
-    .channel(`conv:${conversationId}`)
+    .channel(topic)
     .on(
       'postgres_changes',
       {

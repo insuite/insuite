@@ -100,10 +100,12 @@ create policy "activities readable minus blocks"
     )
   );
 
--- Messages: same idea — hide messages whose sender is in a block
--- relationship with the caller. Conversation row stays visible so the
--- thread title / metadata is still reachable; just the message bodies
--- vanish.
+-- Messages: hide messages whose sender has blocked the caller — a
+-- harasser the caller has been blocked by shouldn't be able to keep
+-- talking at them. The reverse direction (caller blocked the sender)
+-- intentionally does NOT hide: the caller keeps the chat history
+-- intact for their own reference and just loses the ability to reply
+-- (see the INSERT policy below + the chat-thread banner in the UI).
 drop policy if exists "messages visible to conversation participants" on messages;
 drop policy if exists "messages visible minus blocks"                  on messages;
 create policy "messages visible minus blocks"
@@ -115,8 +117,31 @@ create policy "messages visible minus blocks"
     )
     and not exists (
       select 1 from blocks b
-      where (b.blocker_id = auth.uid() and b.blocked_id = sender_id)
-         or (b.blocker_id = sender_id   and b.blocked_id = auth.uid())
+      where b.blocker_id = sender_id and b.blocked_id = auth.uid()
+    )
+  );
+
+-- Messages INSERT: blocks the caller from messaging conversations whose
+-- other participant they have blocked. Replaces schema.sql's plain
+-- "messages insert as sender in own conversation" — defense-in-depth so
+-- the chat-thread banner in app/(app)/messages/[id].tsx can't be bypassed
+-- by hitting PostgREST directly.
+drop policy if exists "messages insert as sender in own conversation" on messages;
+drop policy if exists "messages insert as sender, not blocked"        on messages;
+create policy "messages insert as sender, not blocked"
+  on messages for insert to authenticated with check (
+    auth.uid() = sender_id
+    and exists (
+      select 1 from conversations c
+      where c.id = conversation_id
+        and (c.participant_a = auth.uid() or c.participant_b = auth.uid())
+    )
+    and not exists (
+      select 1
+      from conversations c, blocks b
+      where c.id = conversation_id
+        and b.blocker_id = auth.uid()
+        and b.blocked_id in (c.participant_a, c.participant_b)
     )
   );
 

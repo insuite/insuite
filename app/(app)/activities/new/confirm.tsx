@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,7 +16,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, spacing, typography } from '@/constants/colors';
 import { venueMap } from '@/constants/venues';
 import { createActivity } from '@/lib/activitiesApi';
+import { canPostActivity } from '@/lib/passesApi';
 import { activityDraft, useActivityDraft } from '@/stores/activityDraftStore';
+import { useAuth } from '@/stores/authStore';
+
+type GateReason = 'unlimited' | 'first_free' | 'has_pass' | 'needs_pass';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
@@ -37,16 +42,62 @@ function formatDate(iso: string | null): string {
 export default function ConfirmStep() {
   const router = useRouter();
   const draft = useActivityDraft();
+  const { user } = useAuth();
   const [publishing, setPublishing] = useState(false);
+  const [gateReason, setGateReason] = useState<GateReason | null>(null);
+  const [passDays, setPassDays] = useState<number | null>(null);
 
   const venue = draft.venue ? venueMap[draft.venue] : null;
+
+  // Tell the user *which* permission lane they're on (first-free, active
+  // pass, unlimited godmode) so the perk line below isn't a flat lie when
+  // they've already paid for a Pass.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    canPostActivity(user.id)
+      .then((gate) => {
+        if (cancelled) return;
+        setGateReason(gate.reason);
+        setPassDays(gate.activePass?.daysRemaining ?? null);
+      })
+      .catch(() => {
+        // Non-fatal — leave the perk hidden if we can't determine the lane.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const perkText: string | null = (() => {
+    switch (gateReason) {
+      case 'first_free':
+        return 'Your first post is on the house.';
+      case 'has_pass':
+        return passDays != null
+          ? `Posting with your active Pass · ${passDays}d left.`
+          : 'Posting with your active Pass.';
+      case 'unlimited':
+        return 'Unlimited posting on this account.';
+      case 'needs_pass':
+      case null:
+      default:
+        return null;
+    }
+  })();
 
   const publish = async () => {
     setPublishing(true);
     try {
-      await createActivity(draft);
+      const newId = await createActivity(draft);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+        () => {},
+      );
       activityDraft.reset();
-      router.replace('/activities');
+      // Land on the activity's detail page rather than the list — the user
+      // just put work into composing this; surfacing it directly lets them
+      // share / edit / verify what they published.
+      router.replace(`/activity/${newId}`);
     } catch (err: any) {
       Alert.alert('Could not publish', err?.message ?? 'Please try again.');
     } finally {
@@ -119,16 +170,16 @@ export default function ConfirmStep() {
           )}
         </View>
 
-        <View style={styles.perkCard}>
-          <Ionicons
-            name="gift-outline"
-            size={18}
-            color={colors.accent.gold}
-          />
-          <Text style={styles.perkText}>
-            Your first post is on the house.
-          </Text>
-        </View>
+        {perkText && (
+          <View style={styles.perkCard}>
+            <Ionicons
+              name="gift-outline"
+              size={18}
+              color={colors.accent.gold}
+            />
+            <Text style={styles.perkText}>{perkText}</Text>
+          </View>
+        )}
       </ScrollView>
 
       <View style={styles.footer}>

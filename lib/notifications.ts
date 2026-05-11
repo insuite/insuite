@@ -29,32 +29,21 @@ export interface PushPayload {
 }
 
 /**
- * Request permission, get an Expo push token, and persist it on the user's
- * profile. Idempotent — re-runs are safe and overwrite any prior token.
- *
- * Notes:
- *   - On iOS, `getExpoPushTokenAsync` requires a real device (simulator returns
- *     a "DeviceNotRegisteredError"). We swallow that case so dev on simulator
- *     doesn't error out.
- *   - In Expo Go on iOS the token is backed by Expo's shared APNs cert. In a
- *     dev/production build it uses your own APNs key (configured in EAS).
+ * Read the system permission status WITHOUT prompting. Use to decide whether
+ * to show a priming sheet (status === 'undetermined') vs silently register on
+ * app open (status === 'granted') vs do nothing (status === 'denied').
  */
-export async function registerForPushNotifications(userId: string): Promise<void> {
+export async function getPushPermissionStatus(): Promise<
+  'undetermined' | 'granted' | 'denied'
+> {
+  const result = await Notifications.getPermissionsAsync();
+  return result.status as 'undetermined' | 'granted' | 'denied';
+}
+
+async function persistTokenForUser(userId: string): Promise<void> {
   if (!isSupabaseConfigured || !supabase) return;
 
-  // Permission
-  const existing = await Notifications.getPermissionsAsync();
-  let status = existing.status;
-  if (status !== 'granted') {
-    const ask = await Notifications.requestPermissionsAsync();
-    status = ask.status;
-  }
-  if (status !== 'granted') {
-    console.log('[push] permission denied');
-    return;
-  }
-
-  // Android channel (no-op on iOS but harmless)
+  // Android channel (no-op on iOS but harmless to call)
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('default', {
       name: 'default',
@@ -63,7 +52,6 @@ export async function registerForPushNotifications(userId: string): Promise<void
     });
   }
 
-  // Token
   let token: string | null = null;
   try {
     const projectId =
@@ -74,13 +62,13 @@ export async function registerForPushNotifications(userId: string): Promise<void
     );
     token = result.data;
   } catch (err) {
+    // iOS simulators throw `DeviceNotRegisteredError` — fine in dev.
     console.warn('[push] could not get token (likely simulator)', err);
     return;
   }
 
   if (!token) return;
 
-  // Persist
   const { error } = await supabase
     .from('profiles')
     .update({ expo_push_token: token })
@@ -90,6 +78,52 @@ export async function registerForPushNotifications(userId: string): Promise<void
   } else {
     console.log('[push] registered token', token.slice(0, 30) + '…');
   }
+}
+
+/**
+ * Re-register the token on app open IFF permission was already granted in a
+ * previous session. Never prompts. Safe to call unconditionally from the
+ * auth bootstrap — does nothing for users who haven't decided yet or who
+ * denied permission.
+ */
+export async function registerIfAlreadyGranted(userId: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) return;
+  const status = await getPushPermissionStatus();
+  if (status !== 'granted') return;
+  await persistTokenForUser(userId);
+}
+
+/**
+ * Prompt for permission and persist the token on grant. Returns the final
+ * status so callers can update their priming-sheet UI accordingly. Called
+ * from PushPrimingSheet's "Allow" button after the user has agreed to the
+ * priming copy.
+ *
+ * Notes:
+ *   - On iOS, `getExpoPushTokenAsync` requires a real device (simulator returns
+ *     a "DeviceNotRegisteredError"). We swallow that case so dev on simulator
+ *     doesn't error out.
+ *   - In Expo Go on iOS the token is backed by Expo's shared APNs cert. In a
+ *     dev/production build it uses your own APNs key (configured in EAS).
+ */
+export async function registerForPushNotifications(
+  userId: string,
+): Promise<'granted' | 'denied'> {
+  if (!isSupabaseConfigured || !supabase) return 'denied';
+
+  const existing = await Notifications.getPermissionsAsync();
+  let status = existing.status;
+  if (status !== 'granted') {
+    const ask = await Notifications.requestPermissionsAsync();
+    status = ask.status;
+  }
+  if (status !== 'granted') {
+    console.log('[push] permission denied');
+    return 'denied';
+  }
+
+  await persistTokenForUser(userId);
+  return 'granted';
 }
 
 /**

@@ -67,10 +67,7 @@ export async function listBlockedUsers(): Promise<BlockedUser[]> {
     .eq('blocker_id', me)
     .order('created_at', { ascending: false });
 
-  if (error) {
-    console.warn('[moderation] list blocks failed', error.message);
-    return [];
-  }
+  if (error) throw error;
 
   type Row = {
     blocked_id: string;

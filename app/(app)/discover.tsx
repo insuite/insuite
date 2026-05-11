@@ -500,6 +500,7 @@ const styles = StyleSheet.create({
   },
   filterScroll: {
     flexGrow: 0,
+    height: 60,
     marginBottom: spacing.md,
   },
   filterRow: {

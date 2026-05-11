@@ -425,6 +425,7 @@ const styles = StyleSheet.create({
   },
   cityChipsScroll: {
     flexGrow: 0,
+    height: 60,
     marginBottom: spacing.sm,
     marginHorizontal: -spacing.xl,
   },

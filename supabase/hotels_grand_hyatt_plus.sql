@@ -45,6 +45,18 @@ select * from (values
   ('The St. Regis Hong Kong',                          'Hong Kong',      'China'),
   ('The Langham, Hong Kong',                           'Hong Kong',      'China'),
 
+  -- ============ Taipei ============
+  -- Home market — broader cut than other cities (includes design-luxury
+  -- independents and the cultural-icon Grand Hotel, which sits at the
+  -- upper-upscale/luxury border but is the defining Taipei property).
+  ('The Okura Prestige Taipei',                        'Taipei',         'Taiwan'),
+  ('The Sherwood Taipei',                              'Taipei',         'Taiwan'),
+  ('Humble House Taipei',                              'Taipei',         'Taiwan'),
+  ('Hotel Quote Taipei',                               'Taipei',         'Taiwan'),
+  ('Hotel Éclat Taipei',                               'Taipei',         'Taiwan'),
+  ('The Grand Hotel Taipei',                           'Taipei',         'Taiwan'),
+  ('Hotel Royal-Nikko Taipei',                         'Taipei',         'Taiwan'),
+
   -- ============ Bangkok ============
   ('Waldorf Astoria Bangkok',                          'Bangkok',        'Thailand'),
   ('Banyan Tree Bangkok',                              'Bangkok',        'Thailand'),

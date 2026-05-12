@@ -119,6 +119,7 @@ async function applySession(session: Session | null) {
     vibeTags: profile.vibe_tags,
     referralCode: profile.referral_code ?? generateReferralCode(profile.first_name),
     avatarUri: profile.avatar_url,
+    isAdmin: profile.is_admin ?? false,
   });
   set({ status: 'ready' });
   void notificationsStore.refresh(session.user.id);

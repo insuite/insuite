@@ -59,6 +59,7 @@ export type Database = {
           referral_code: string | null;
           expo_push_token: string | null;
           is_unlimited: boolean;
+          is_admin: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -73,6 +74,8 @@ export type Database = {
           referral_code?: string | null;
           expo_push_token?: string | null;
           is_unlimited?: boolean;
+          // is_admin is intentionally omitted from Insert/Update: it's
+          // service-role-only (column-level revoke from authenticated).
         };
         Update: Partial<Database['public']['Tables']['profiles']['Insert']>;
         Relationships: [];
@@ -114,7 +117,16 @@ export type Database = {
           country: string;
           notes?: string | null;
         };
-        Update: Partial<Database['public']['Tables']['hotel_requests']['Insert']>;
+        // Update includes status / reviewed_at so the admin queue can flip
+        // them without going through Insert's user-facing shape.
+        Update: {
+          name?: string;
+          city?: string;
+          country?: string;
+          notes?: string | null;
+          status?: 'pending' | 'approved' | 'rejected';
+          reviewed_at?: string | null;
+        };
         Relationships: [];
       };
       activities: {

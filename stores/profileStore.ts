@@ -10,6 +10,7 @@ export interface Profile {
   vibeTags: string[];
   referralCode: string;
   avatarUri: string | null;   // local URI in UI mode; will become Supabase Storage URL later
+  isAdmin: boolean;           // set true via Dashboard; unlocks /admin screens
 }
 
 const initial: Profile = {
@@ -20,6 +21,7 @@ const initial: Profile = {
   vibeTags: ['Quiet', 'Early riser'],
   referralCode: 'INSUITE1',
   avatarUri: null,
+  isAdmin: false,
 };
 
 let state: Profile = { ...initial };

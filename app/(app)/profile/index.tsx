@@ -213,6 +213,13 @@ export default function ProfileScreen() {
 
         <View style={styles.divider} />
 
+        {profile.isAdmin && (
+          <MenuRow
+            icon="construct-outline"
+            label="Admin"
+            onPress={() => router.push('/admin')}
+          />
+        )}
         <MenuRow
           icon="card-outline"
           label="Plans & pricing"

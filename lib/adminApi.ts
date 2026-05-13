@@ -9,6 +9,8 @@
 
 import { isSupabaseConfigured, supabase, type Database } from './supabase';
 
+export type HotelRequestStatus = 'pending' | 'approved' | 'rejected';
+
 export interface HotelRequestSummary {
   id: string;
   requesterId: string;
@@ -17,7 +19,9 @@ export interface HotelRequestSummary {
   city: string;
   country: string;
   notes: string | null;
+  status: HotelRequestStatus;
   createdAt: string;
+  reviewedAt: string | null;
 }
 
 interface HotelInput {
@@ -123,16 +127,20 @@ export async function deleteHotel(id: string): Promise<void> {
 // hotel_requests
 // =====================================================
 
-export async function listPendingHotelRequests(): Promise<HotelRequestSummary[]> {
+export async function listHotelRequests(
+  status: HotelRequestStatus,
+): Promise<HotelRequestSummary[]> {
   if (!isSupabaseConfigured || !supabase) return [];
   const { data, error } = await supabase
     .from('hotel_requests')
     .select(
-      `id, requester_id, name, city, country, notes, created_at,
+      `id, requester_id, name, city, country, notes, status, created_at, reviewed_at,
        requester:profiles!hotel_requests_requester_id_fkey(first_name)`,
     )
-    .eq('status', 'pending')
-    .order('created_at', { ascending: false });
+    .eq('status', status)
+    .order(status === 'pending' ? 'created_at' : 'reviewed_at', {
+      ascending: false,
+    });
   if (error) throw error;
 
   type Row = {
@@ -142,7 +150,9 @@ export async function listPendingHotelRequests(): Promise<HotelRequestSummary[]>
     city: string;
     country: string;
     notes: string | null;
+    status: HotelRequestStatus;
     created_at: string;
+    reviewed_at: string | null;
     requester: { first_name: string } | null;
   };
   return ((data ?? []) as unknown as Row[]).map((r) => ({
@@ -153,8 +163,19 @@ export async function listPendingHotelRequests(): Promise<HotelRequestSummary[]>
     city: r.city,
     country: r.country,
     notes: r.notes,
+    status: r.status,
     createdAt: r.created_at,
+    reviewedAt: r.reviewed_at,
   }));
+}
+
+/**
+ * Thin shim for the landing screen's pending count. Kept as a named
+ * export because the call site is well-positioned to be its own pending-
+ * specific affordance even after the queue UI gained status tabs.
+ */
+export async function listPendingHotelRequests(): Promise<HotelRequestSummary[]> {
+  return listHotelRequests('pending');
 }
 
 /**

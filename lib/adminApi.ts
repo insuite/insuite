@@ -7,7 +7,22 @@
  * which the UI surfaces to the user.
  */
 
+import {
+  assertHotelInput,
+  buildReportTarget,
+  normalizeHotelInput,
+  REPORT_REASON_LABELS,
+  type HotelInput,
+  type ReportReason,
+  type ReportTarget,
+  type ReportTargetSource,
+} from './adminApi.helpers';
 import { isSupabaseConfigured, supabase, type Database } from './supabase';
+
+// Re-export the pure types/values from helpers so existing call sites
+// (`import { ReportReason } from '@/lib/adminApi'` etc.) keep working.
+export type { ReportReason, ReportTarget };
+export { REPORT_REASON_LABELS };
 
 export type HotelRequestStatus = 'pending' | 'approved' | 'rejected';
 
@@ -24,26 +39,6 @@ export interface HotelRequestSummary {
   reviewedAt: string | null;
 }
 
-interface HotelInput {
-  name: string;
-  city: string;
-  country: string;
-}
-
-function normalize(input: HotelInput): HotelInput {
-  return {
-    name: input.name.trim(),
-    city: input.city.trim(),
-    country: input.country.trim(),
-  };
-}
-
-function assertHotelInput(t: HotelInput): void {
-  if (t.name.length < 2) throw new Error('Hotel name is required.');
-  if (t.city.length < 2) throw new Error('City is required.');
-  if (t.country.length < 2) throw new Error('Country is required.');
-}
-
 /**
  * Insert a hotel. Dedups case-insensitively by (name, city) — if an entry
  * already exists, returns that id instead of inserting a second row. This
@@ -56,7 +51,7 @@ export async function addHotel(
   if (!isSupabaseConfigured || !supabase) {
     throw new Error('Not connected to Supabase.');
   }
-  const trimmed = normalize(input);
+  const trimmed = normalizeHotelInput(input);
   assertHotelInput(trimmed);
 
   const { data: existing, error: lookupErr } = await supabase
@@ -261,22 +256,6 @@ export async function getHotelById(id: string): Promise<AdminHotel | null> {
 
 export type ReportStatus = 'pending' | 'reviewed' | 'actioned' | 'dismissed';
 
-export type ReportReason =
-  | 'harassment'
-  | 'sexual'
-  | 'spam'
-  | 'impersonation'
-  | 'underage'
-  | 'other';
-
-export interface ReportTarget {
-  type: 'user' | 'activity' | 'message';
-  /** Human-readable summary for the card. */
-  label: string;
-  /** Route to drill into for full context, or null if not deep-linkable. */
-  href: string | null;
-}
-
 export interface ReportSummary {
   id: string;
   reporterId: string;
@@ -287,15 +266,6 @@ export interface ReportSummary {
   createdAt: string;
   reviewedAt: string | null;
   target: ReportTarget;
-}
-
-function formatActivityLabel(
-  venue: string,
-  hotel: string | null,
-  date: string,
-): string {
-  const parts = [venue, hotel, date].filter((p): p is string => !!p);
-  return parts.join(' · ');
 }
 
 export async function listReports(
@@ -325,7 +295,7 @@ export async function listReports(
 
   if (error) throw error;
 
-  type Row = {
+  type Row = ReportTargetSource & {
     id: string;
     reporter_id: string;
     reason: ReportReason;
@@ -337,62 +307,19 @@ export async function listReports(
     reported_activity_id: string | null;
     reported_message_id: string | null;
     reporter: { first_name: string } | null;
-    reported_user: { id: string; first_name: string } | null;
-    reported_activity:
-      | { id: string; venue: string; date: string; hotel: { name: string } | null }
-      | null;
-    reported_message:
-      | { id: string; conversation_id: string; content: string }
-      | null;
   };
 
-  return ((data ?? []) as unknown as Row[]).map((r): ReportSummary => {
-    let target: ReportTarget;
-    if (r.reported_user) {
-      target = {
-        type: 'user',
-        label: `@${r.reported_user.first_name}`,
-        href: `/user/${r.reported_user.id}`,
-      };
-    } else if (r.reported_activity) {
-      target = {
-        type: 'activity',
-        label: formatActivityLabel(
-          r.reported_activity.venue,
-          r.reported_activity.hotel?.name ?? null,
-          r.reported_activity.date,
-        ),
-        href: `/activity/${r.reported_activity.id}`,
-      };
-    } else if (r.reported_message) {
-      const snippet =
-        r.reported_message.content.length > 60
-          ? r.reported_message.content.slice(0, 60) + '…'
-          : r.reported_message.content;
-      target = {
-        type: 'message',
-        label: `"${snippet}"`,
-        href: `/messages/${r.reported_message.conversation_id}`,
-      };
-    } else {
-      // Shouldn't happen — the check constraint requires at least one
-      // target — but the FK ON DELETE CASCADE could leave a brief
-      // window. Render defensively.
-      target = { type: 'user', label: '(target removed)', href: null };
-    }
-
-    return {
-      id: r.id,
-      reporterId: r.reporter_id,
-      reporterName: r.reporter?.first_name ?? 'Unknown',
-      reason: r.reason,
-      details: r.details,
-      status: r.status,
-      createdAt: r.created_at,
-      reviewedAt: r.reviewed_at,
-      target,
-    };
-  });
+  return ((data ?? []) as unknown as Row[]).map((r): ReportSummary => ({
+    id: r.id,
+    reporterId: r.reporter_id,
+    reporterName: r.reporter?.first_name ?? 'Unknown',
+    reason: r.reason,
+    details: r.details,
+    status: r.status,
+    createdAt: r.created_at,
+    reviewedAt: r.reviewed_at,
+    target: buildReportTarget(r),
+  }));
 }
 
 export async function markReportActioned(reportId: string): Promise<void> {
@@ -427,11 +354,3 @@ export async function listPendingReports(): Promise<ReportSummary[]> {
   return listReports('pending');
 }
 
-export const REPORT_REASON_LABELS: Record<ReportReason, string> = {
-  harassment: 'Harassment or threats',
-  sexual: 'Sexual or explicit content',
-  spam: 'Spam or solicitation',
-  impersonation: 'Impersonation',
-  underage: 'Appears to be under 13',
-  other: 'Something else',
-};

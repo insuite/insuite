@@ -368,3 +368,173 @@ export async function listPendingReports(): Promise<ReportSummary[]> {
   return listReports('pending');
 }
 
+// =====================================================
+// Moderation actions — wired into /activity/[id], /messages/[id], and
+// /user/[id] when the signed-in user is admin. RLS in
+// supabase/admin_moderation.sql is what actually authorises these;
+// non-admins calling them get a Postgres permission error / 0-row
+// update.
+// =====================================================
+
+/**
+ * Cancel any activity (admin override of the host-only path in
+ * activitiesApi.cancelActivity). Activity stays in the DB so guests
+ * still see the "cancelled" banner instead of a 404.
+ */
+export async function adminCancelActivity(id: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) return;
+  const { error } = await supabase
+    .from('activities')
+    .update({ status: 'cancelled' })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+/**
+ * Permanently remove an activity, regardless of host. Cascades into
+ * join_requests and conversations (and via them, messages) per the
+ * schema FKs — same blast radius as the host-side delete.
+ */
+export async function adminDeleteActivity(id: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) return;
+  const { error } = await supabase.from('activities').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/**
+ * Delete a single message. There's no user-facing delete-message
+ * feature, so this only succeeds for admins (per the new RLS).
+ * Single-message takedown so the rest of the conversation stays intact.
+ */
+export async function adminDeleteMessage(id: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) return;
+  const { error } = await supabase.from('messages').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/**
+ * Clear a user's avatar. Sets avatar_url to null; the row in storage
+ * is left orphaned (a periodic cleanup job is out of scope here — the
+ * URL in the DB is what the app actually reads).
+ */
+export async function adminClearUserAvatar(userId: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) return;
+  const { error } = await supabase
+    .from('profiles')
+    .update({ avatar_url: null })
+    .eq('id', userId);
+  if (error) throw error;
+}
+
+export async function adminClearUserBio(userId: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) return;
+  const { error } = await supabase
+    .from('profiles')
+    .update({ bio: null })
+    .eq('id', userId);
+  if (error) throw error;
+}
+
+// =====================================================
+// Admin chat read — bypasses the participant scope of messagesApi so
+// /admin can open any conversation behind a reported message.
+// =====================================================
+
+export interface AdminChatParticipant {
+  id: string;
+  firstName: string;
+  initial: string;
+  avatarUri: string | null;
+}
+
+export interface AdminChatContext {
+  conversationId: string;
+  activityId: string | null;
+  participantA: AdminChatParticipant;
+  participantB: AdminChatParticipant;
+  /** Pretty venue / date / time line for the chat header. */
+  venueContext: string | null;
+}
+
+export interface AdminChatMessage {
+  id: string;
+  senderId: string;
+  text: string;
+  createdAt: string;
+}
+
+export async function getAdminConversation(
+  conversationId: string,
+): Promise<AdminChatContext | null> {
+  if (!isSupabaseConfigured || !supabase) return null;
+
+  const { data, error } = await supabase
+    .from('conversations')
+    .select(
+      `id, activity_id, participant_a, participant_b,
+       a:profiles!conversations_participant_a_fkey(id, first_name, avatar_url),
+       b:profiles!conversations_participant_b_fkey(id, first_name, avatar_url),
+       activity:activities!conversations_activity_id_fkey(venue, date, time_from, time_to)`,
+    )
+    .eq('id', conversationId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  type Row = {
+    id: string;
+    activity_id: string | null;
+    participant_a: string;
+    participant_b: string;
+    a: { id: string; first_name: string; avatar_url: string | null } | null;
+    b: { id: string; first_name: string; avatar_url: string | null } | null;
+    activity: {
+      venue: string;
+      date: string;
+      time_from: string;
+      time_to: string;
+    } | null;
+  };
+  const row = data as unknown as Row;
+  if (!row.a || !row.b) return null;
+
+  const part = (
+    p: { id: string; first_name: string; avatar_url: string | null },
+  ): AdminChatParticipant => ({
+    id: p.id,
+    firstName: p.first_name,
+    initial: (p.first_name[0] ?? '?').toUpperCase(),
+    avatarUri: p.avatar_url,
+  });
+
+  const venueContext = row.activity
+    ? `${row.activity.venue} · ${row.activity.date} · ${row.activity.time_from.slice(0, 5)}–${row.activity.time_to.slice(0, 5)}`
+    : null;
+
+  return {
+    conversationId: row.id,
+    activityId: row.activity_id,
+    participantA: part(row.a),
+    participantB: part(row.b),
+    venueContext,
+  };
+}
+
+export async function listAdminMessages(
+  conversationId: string,
+): Promise<AdminChatMessage[]> {
+  if (!isSupabaseConfigured || !supabase) return [];
+  const { data, error } = await supabase
+    .from('messages')
+    .select('id, sender_id, content, created_at')
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((m) => ({
+    id: m.id,
+    senderId: m.sender_id,
+    text: m.content,
+    createdAt: m.created_at,
+  }));
+}
+

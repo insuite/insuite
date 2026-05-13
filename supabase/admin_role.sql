@@ -19,10 +19,40 @@ alter table profiles
 
 -- 2. Lock the flag down. The existing "profiles update own" policy lets a
 --    user write their own row, which would otherwise let anyone self-promote.
---    Column-level revoke is the simplest fix — service_role (Dashboard, edge
---    functions) bypasses table grants, so admin assignment stays a
---    side-door-only action.
+--    Two layers of defense:
+--
+--   (a) Column-level REVOKE. Documents intent. *Doesn't actually enforce
+--       on its own* — Supabase grants `authenticated` a table-wide UPDATE,
+--       and table-wide UPDATE covers all columns, so a column-level revoke
+--       is a no-op while the table-level grant exists. Kept here as a
+--       tripwire in case grants are ever tightened.
+--
+--   (b) BEFORE UPDATE trigger — the real wall. Rejects any UPDATE that
+--       changes is_admin when current_user is 'authenticated' or 'anon'.
+--       service_role (edge functions) and Dashboard (postgres) sessions
+--       pass through, so legitimate admin assignment via
+--       `update profiles set is_admin = true where id = '...'` from the
+--       SQL editor still works.
 revoke update (is_admin) on profiles from anon, authenticated;
+
+create or replace function public.block_is_admin_self_assignment() returns trigger
+language plpgsql
+as $$
+begin
+  if new.is_admin is distinct from old.is_admin
+     and current_user in ('authenticated', 'anon') then
+    raise exception 'is_admin can only be changed by service_role or dashboard'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_block_is_admin_self_assignment on profiles;
+create trigger profiles_block_is_admin_self_assignment
+  before update of is_admin on profiles
+  for each row
+  execute function public.block_is_admin_self_assignment();
 
 -- 3. hotels: read stays open to all authenticated users (existing policy).
 --    Write is now admin-only — previously there was no write policy at all,

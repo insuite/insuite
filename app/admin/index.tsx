@@ -14,6 +14,7 @@ import { colors, radius, spacing, typography } from '@/constants/colors';
 import {
   listHotelsForAdmin,
   listPendingHotelRequests,
+  listPendingReports,
 } from '@/lib/adminApi';
 import { useProfile } from '@/stores/profileStore';
 
@@ -23,22 +24,31 @@ export default function AdminLanding() {
   const router = useRouter();
   const profile = useProfile();
   const [hotelCount, setHotelCount] = useState<number | null>(null);
-  const [pendingCount, setPendingCount] = useState<number | null>(null);
+  const [pendingRequestCount, setPendingRequestCount] = useState<number | null>(
+    null,
+  );
+  const [pendingReportCount, setPendingReportCount] = useState<number | null>(
+    null,
+  );
 
   // Refresh counts every time the screen comes back into focus — covers
-  // returning from /admin/hotels (count changed via add/delete) or
-  // /admin/requests (pending dropped after approve/reject).
+  // returning from /admin/hotels (count changed via add/delete),
+  // /admin/requests (pending dropped after approve/reject), and
+  // /admin/reports (pending dropped after dismiss/action).
   useFocusEffect(
     useCallback(() => {
       if (!profile.isAdmin) return;
       let cancelled = false;
-      void Promise.all([listHotelsForAdmin(), listPendingHotelRequests()]).then(
-        ([hotels, requests]) => {
-          if (cancelled) return;
-          setHotelCount(hotels.length);
-          setPendingCount(requests.length);
-        },
-      );
+      void Promise.all([
+        listHotelsForAdmin(),
+        listPendingHotelRequests(),
+        listPendingReports(),
+      ]).then(([hotels, requests, reports]) => {
+        if (cancelled) return;
+        setHotelCount(hotels.length);
+        setPendingRequestCount(requests.length);
+        setPendingReportCount(reports.length);
+      });
       return () => {
         cancelled = true;
       };
@@ -80,14 +90,27 @@ export default function AdminLanding() {
             icon="mail-unread-outline"
             label="Hotel requests"
             sub={
-              pendingCount === null
+              pendingRequestCount === null
                 ? 'Loading…'
-                : pendingCount === 0
+                : pendingRequestCount === 0
                   ? 'No pending requests'
-                  : `${pendingCount} pending`
+                  : `${pendingRequestCount} pending`
             }
-            highlight={pendingCount !== null && pendingCount > 0}
+            highlight={pendingRequestCount !== null && pendingRequestCount > 0}
             onPress={() => router.push('/admin/requests')}
+          />
+          <MenuCard
+            icon="flag-outline"
+            label="Reports"
+            sub={
+              pendingReportCount === null
+                ? 'Loading…'
+                : pendingReportCount === 0
+                  ? 'No pending reports'
+                  : `${pendingReportCount} pending`
+            }
+            highlight={pendingReportCount !== null && pendingReportCount > 0}
+            onPress={() => router.push('/admin/reports')}
           />
         </ScrollView>
       </SafeAreaView>

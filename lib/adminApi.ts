@@ -253,3 +253,185 @@ export async function getHotelById(id: string): Promise<AdminHotel | null> {
   if (error) throw error;
   return data;
 }
+
+// =====================================================
+// Reports — Apple Guideline 1.2 abuse-handling moderation queue.
+// Read/update gated by supabase/admin_reports.sql RLS.
+// =====================================================
+
+export type ReportStatus = 'pending' | 'reviewed' | 'actioned' | 'dismissed';
+
+export type ReportReason =
+  | 'harassment'
+  | 'sexual'
+  | 'spam'
+  | 'impersonation'
+  | 'underage'
+  | 'other';
+
+export interface ReportTarget {
+  type: 'user' | 'activity' | 'message';
+  /** Human-readable summary for the card. */
+  label: string;
+  /** Route to drill into for full context, or null if not deep-linkable. */
+  href: string | null;
+}
+
+export interface ReportSummary {
+  id: string;
+  reporterId: string;
+  reporterName: string;
+  reason: ReportReason;
+  details: string | null;
+  status: ReportStatus;
+  createdAt: string;
+  reviewedAt: string | null;
+  target: ReportTarget;
+}
+
+function formatActivityLabel(
+  venue: string,
+  hotel: string | null,
+  date: string,
+): string {
+  const parts = [venue, hotel, date].filter((p): p is string => !!p);
+  return parts.join(' · ');
+}
+
+export async function listReports(
+  status: ReportStatus,
+): Promise<ReportSummary[]> {
+  if (!isSupabaseConfigured || !supabase) return [];
+
+  const { data, error } = await supabase
+    .from('reports')
+    .select(
+      `id, reporter_id, reason, details, status, created_at, reviewed_at,
+       reported_user_id, reported_activity_id, reported_message_id,
+       reporter:profiles!reports_reporter_id_fkey(first_name),
+       reported_user:profiles!reports_reported_user_id_fkey(id, first_name),
+       reported_activity:activities!reports_reported_activity_id_fkey(
+         id, venue, date,
+         hotel:hotels!activities_hotel_id_fkey(name)
+       ),
+       reported_message:messages!reports_reported_message_id_fkey(
+         id, conversation_id, content
+       )`,
+    )
+    .eq('status', status)
+    .order(status === 'pending' ? 'created_at' : 'reviewed_at', {
+      ascending: false,
+    });
+
+  if (error) throw error;
+
+  type Row = {
+    id: string;
+    reporter_id: string;
+    reason: ReportReason;
+    details: string | null;
+    status: ReportStatus;
+    created_at: string;
+    reviewed_at: string | null;
+    reported_user_id: string | null;
+    reported_activity_id: string | null;
+    reported_message_id: string | null;
+    reporter: { first_name: string } | null;
+    reported_user: { id: string; first_name: string } | null;
+    reported_activity:
+      | { id: string; venue: string; date: string; hotel: { name: string } | null }
+      | null;
+    reported_message:
+      | { id: string; conversation_id: string; content: string }
+      | null;
+  };
+
+  return ((data ?? []) as unknown as Row[]).map((r): ReportSummary => {
+    let target: ReportTarget;
+    if (r.reported_user) {
+      target = {
+        type: 'user',
+        label: `@${r.reported_user.first_name}`,
+        href: `/user/${r.reported_user.id}`,
+      };
+    } else if (r.reported_activity) {
+      target = {
+        type: 'activity',
+        label: formatActivityLabel(
+          r.reported_activity.venue,
+          r.reported_activity.hotel?.name ?? null,
+          r.reported_activity.date,
+        ),
+        href: `/activity/${r.reported_activity.id}`,
+      };
+    } else if (r.reported_message) {
+      const snippet =
+        r.reported_message.content.length > 60
+          ? r.reported_message.content.slice(0, 60) + '…'
+          : r.reported_message.content;
+      target = {
+        type: 'message',
+        label: `"${snippet}"`,
+        href: `/messages/${r.reported_message.conversation_id}`,
+      };
+    } else {
+      // Shouldn't happen — the check constraint requires at least one
+      // target — but the FK ON DELETE CASCADE could leave a brief
+      // window. Render defensively.
+      target = { type: 'user', label: '(target removed)', href: null };
+    }
+
+    return {
+      id: r.id,
+      reporterId: r.reporter_id,
+      reporterName: r.reporter?.first_name ?? 'Unknown',
+      reason: r.reason,
+      details: r.details,
+      status: r.status,
+      createdAt: r.created_at,
+      reviewedAt: r.reviewed_at,
+      target,
+    };
+  });
+}
+
+export async function markReportActioned(reportId: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) return;
+  const { error } = await supabase
+    .from('reports')
+    .update({
+      status: 'actioned',
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq('id', reportId);
+  if (error) throw error;
+}
+
+export async function dismissReport(reportId: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) return;
+  const { error } = await supabase
+    .from('reports')
+    .update({
+      status: 'dismissed',
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq('id', reportId);
+  if (error) throw error;
+}
+
+/**
+ * Used by the landing screen badge — same shape as
+ * listPendingHotelRequests's shim.
+ */
+export async function listPendingReports(): Promise<ReportSummary[]> {
+  return listReports('pending');
+}
+
+export const REPORT_REASON_LABELS: Record<ReportReason, string> = {
+  harassment: 'Harassment or threats',
+  sexual: 'Sexual or explicit content',
+  spam: 'Spam or solicitation',
+  impersonation: 'Impersonation',
+  underage: 'Appears to be under 13',
+  other: 'Something else',
+};

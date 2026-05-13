@@ -6,6 +6,7 @@ import {
   FlatList,
   Keyboard,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -53,6 +54,26 @@ export default function AdminHotelsList() {
     );
   }, [hotels, query]);
 
+  // Admin chip row — unlike the user-facing picker, no PINNED / EXCLUDED
+  // curation since the admin needs to see the full catalog distribution.
+  // Pure count-based, top 12 cities. Tapping a chip drops the city name
+  // into the search query (same mechanism as the activity picker).
+  const cityChips = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const h of hotels) {
+      counts.set(h.city, (counts.get(h.city) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => {
+        if (b[1] !== a[1]) return b[1] - a[1];
+        return a[0].localeCompare(b[0]);
+      })
+      .map(([city]) => city)
+      .slice(0, 12);
+  }, [hotels]);
+
+  const activeCity = query.trim().toLowerCase();
+
   return (
     <AdminGate>
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -77,6 +98,51 @@ export default function AdminHotelsList() {
             <Ionicons name="add" size={26} color={colors.accent.gold} />
           </Pressable>
         </View>
+
+        {cityChips.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.cityChipsRow}
+            style={styles.cityChipsScroll}
+          >
+            <Pressable
+              onPress={() => setQuery('')}
+              style={[
+                styles.cityChip,
+                activeCity === '' && styles.cityChipActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.cityChipText,
+                  activeCity === '' && styles.cityChipTextActive,
+                ]}
+              >
+                All
+              </Text>
+            </Pressable>
+            {cityChips.map((city) => {
+              const isActive = activeCity === city.toLowerCase();
+              return (
+                <Pressable
+                  key={city}
+                  onPress={() => setQuery(city)}
+                  style={[styles.cityChip, isActive && styles.cityChipActive]}
+                >
+                  <Text
+                    style={[
+                      styles.cityChipText,
+                      isActive && styles.cityChipTextActive,
+                    ]}
+                  >
+                    {city}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        )}
 
         <View style={styles.searchWrap}>
           <Ionicons name="search" size={18} color={colors.text.faint} />
@@ -155,6 +221,39 @@ const styles = StyleSheet.create({
   },
   navBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   navTitle: { ...typography.h3, color: colors.text.primary },
+  cityChipsScroll: {
+    flexGrow: 0,
+    height: 54,
+    marginBottom: spacing.xs,
+  },
+  cityChipsRow: {
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+  },
+  cityChip: {
+    height: 34,
+    paddingHorizontal: 14,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    backgroundColor: colors.bg.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cityChipActive: {
+    borderColor: colors.accent.gold,
+    backgroundColor: colors.border.active,
+  },
+  cityChipText: {
+    ...typography.small,
+    color: colors.text.secondary,
+  },
+  cityChipTextActive: {
+    color: colors.text.primary,
+    fontWeight: '500',
+  },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',

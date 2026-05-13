@@ -19,41 +19,53 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, spacing, typography } from '@/constants/colors';
 import {
   approveHotelRequest,
-  listPendingHotelRequests,
+  listHotelRequests,
   rejectHotelRequest,
+  type HotelRequestStatus,
   type HotelRequestSummary,
 } from '@/lib/adminApi';
 
 import { AdminGate } from '@/components/admin/AdminGate';
 
+const TABS: { key: HotelRequestStatus; label: string }[] = [
+  { key: 'pending', label: 'Pending' },
+  { key: 'approved', label: 'Approved' },
+  { key: 'rejected', label: 'Rejected' },
+];
+
 export default function AdminRequests() {
   const router = useRouter();
+  const [tab, setTab] = useState<HotelRequestStatus>('pending');
   const [requests, setRequests] = useState<HotelRequestSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [approveTarget, setApproveTarget] = useState<HotelRequestSummary | null>(
     null,
   );
 
-  const refresh = useCallback(() => {
-    let cancelled = false;
-    setLoading(true);
-    listPendingHotelRequests()
-      .then((list) => {
-        if (cancelled) return;
-        setRequests(list);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const refresh = useCallback(
+    (status: HotelRequestStatus) => {
+      let cancelled = false;
+      setLoading(true);
+      listHotelRequests(status)
+        .then((list) => {
+          if (cancelled) return;
+          setRequests(list);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+      return () => {
+        cancelled = true;
+      };
+    },
+    [],
+  );
 
+  // Re-fetch when tab changes or screen regains focus.
   useFocusEffect(
     useCallback(() => {
-      return refresh();
-    }, [refresh]),
+      return refresh(tab);
+    }, [refresh, tab]),
   );
 
   const onReject = (req: HotelRequestSummary) => {
@@ -81,6 +93,13 @@ export default function AdminRequests() {
     );
   };
 
+  const emptyMessage =
+    tab === 'pending'
+      ? 'No pending requests.'
+      : tab === 'approved'
+        ? 'No approved requests yet.'
+        : 'No rejected requests yet.';
+
   return (
     <AdminGate>
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -98,6 +117,29 @@ export default function AdminRequests() {
           </Pressable>
           <Text style={styles.navTitle}>Hotel requests</Text>
           <View style={styles.navBtn} />
+        </View>
+
+        <View style={styles.tabBar}>
+          {TABS.map((t) => {
+            const active = t.key === tab;
+            return (
+              <Pressable
+                key={t.key}
+                onPress={() => setTab(t.key)}
+                style={({ pressed }) => [
+                  styles.tab,
+                  active && styles.tabActive,
+                  pressed && !active && { opacity: 0.6 },
+                ]}
+              >
+                <Text
+                  style={[styles.tabLabel, active && styles.tabLabelActive]}
+                >
+                  {t.label}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
 
         {loading ? (
@@ -121,39 +163,50 @@ export default function AdminRequests() {
                 <Text style={styles.cardMeta}>
                   From {item.requesterName} ·{' '}
                   {new Date(item.createdAt).toLocaleDateString()}
+                  {item.status !== 'pending' && item.reviewedAt
+                    ? ` · ${item.status} ${new Date(item.reviewedAt).toLocaleDateString()}`
+                    : ''}
                 </Text>
-                <View style={styles.actions}>
-                  <Pressable
-                    onPress={() => onReject(item)}
-                    style={({ pressed }) => [
-                      styles.actionBtn,
-                      styles.rejectBtn,
-                      pressed && { opacity: 0.7 },
-                    ]}
-                  >
-                    <Text style={styles.rejectText}>Reject</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => setApproveTarget(item)}
-                    style={({ pressed }) => [
-                      styles.actionBtn,
-                      styles.approveBtn,
-                      pressed && { opacity: 0.85 },
-                    ]}
-                  >
-                    <Text style={styles.approveText}>Approve…</Text>
-                  </Pressable>
-                </View>
+                {item.status === 'pending' && (
+                  <View style={styles.actions}>
+                    <Pressable
+                      onPress={() => onReject(item)}
+                      style={({ pressed }) => [
+                        styles.actionBtn,
+                        styles.rejectBtn,
+                        pressed && { opacity: 0.7 },
+                      ]}
+                    >
+                      <Text style={styles.rejectText}>Reject</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setApproveTarget(item)}
+                      style={({ pressed }) => [
+                        styles.actionBtn,
+                        styles.approveBtn,
+                        pressed && { opacity: 0.85 },
+                      ]}
+                    >
+                      <Text style={styles.approveText}>Approve…</Text>
+                    </Pressable>
+                  </View>
+                )}
               </View>
             )}
             ListEmptyComponent={
               <View style={styles.empty}>
                 <Ionicons
-                  name="checkmark-circle-outline"
+                  name={
+                    tab === 'pending'
+                      ? 'checkmark-circle-outline'
+                      : tab === 'approved'
+                        ? 'archive-outline'
+                        : 'close-circle-outline'
+                  }
                   size={32}
                   color={colors.text.faint}
                 />
-                <Text style={styles.emptyText}>No pending requests.</Text>
+                <Text style={styles.emptyText}>{emptyMessage}</Text>
               </View>
             }
           />
@@ -316,6 +369,35 @@ const styles = StyleSheet.create({
   },
   navBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   navTitle: { ...typography.h3, color: colors.text.primary },
+  tabBar: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
+  },
+  tab: {
+    flex: 1,
+    height: 36,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    backgroundColor: colors.bg.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabActive: {
+    borderColor: colors.accent.gold,
+    backgroundColor: colors.border.active,
+  },
+  tabLabel: {
+    ...typography.small,
+    color: colors.text.secondary,
+  },
+  tabLabelActive: {
+    color: colors.text.primary,
+    fontWeight: '500',
+  },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: {
     paddingHorizontal: spacing.xl,

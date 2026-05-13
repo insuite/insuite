@@ -54,25 +54,39 @@ export default function HotelStep() {
     );
   }, [query, hotels]);
 
-  // Top cities for quick-filter chips above the search box. Sorted by hotel
-  // count desc so the most-stocked cities show first; cap at 8 to keep one
-  // horizontal row from feeling unbounded. PINNED cities are always present
-  // (regardless of count) — useful for the home market that may not have the
-  // most rooms but still matters editorially.
+  // Top cities for quick-filter chips above the search box.
+  //
+  // PINNED cities are shown first in this exact order — useful for the
+  // home market + the APAC corridor we want to surface regardless of
+  // raw hotel count.
+  //
+  // EXCLUDED cities are never offered as a chip even if their count
+  // would otherwise put them in the top N (they're still reachable via
+  // free-text search).
+  //
+  // After pinned + excluded are applied, remaining slots fill with the
+  // highest-count cities. Total cap of 9 keeps the horizontal row from
+  // running unbounded.
   const cityChips = useMemo(() => {
-    const PINNED = ['Taipei'];
+    const PINNED = ['Taipei', 'Tokyo', 'Singapore', 'Bangkok', 'Hong Kong'];
+    const EXCLUDED = new Set(['Shanghai', 'Maldives']);
+    const TOTAL_CAP = 9;
+
     const counts = new Map<string, number>();
     for (const h of hotels) {
       counts.set(h.city, (counts.get(h.city) ?? 0) + 1);
     }
     const sorted = Array.from(counts.entries())
+      .filter(([city]) => !EXCLUDED.has(city))
       .sort((a, b) => {
         if (b[1] !== a[1]) return b[1] - a[1];
         return a[0].localeCompare(b[0]);
       })
       .map(([city]) => city);
     const pinned = PINNED.filter((c) => counts.has(c));
-    const rest = sorted.filter((c) => !pinned.includes(c)).slice(0, 8);
+    const rest = sorted
+      .filter((c) => !pinned.includes(c))
+      .slice(0, Math.max(0, TOTAL_CAP - pinned.length));
     return [...pinned, ...rest];
   }, [hotels]);
 

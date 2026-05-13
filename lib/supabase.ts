@@ -291,7 +291,14 @@ export type Database = {
           reason: ReportReason;
           details?: string | null;
         };
-        Update: Partial<Database['public']['Tables']['reports']['Insert']>;
+        // Update includes status / reviewed_at so the admin queue can
+        // flip them — outside the user-facing Insert shape.
+        Update: {
+          reason?: ReportReason;
+          details?: string | null;
+          status?: 'pending' | 'reviewed' | 'actioned' | 'dismissed';
+          reviewed_at?: string | null;
+        };
         Relationships: [];
       };
     };

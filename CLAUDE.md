@@ -44,7 +44,8 @@ insuite/
 │   │   ├── index.tsx             # Landing
 │   │   ├── hotels/               # list / new / [id] edit+delete
 │   │   ├── requests.tsx          # hotel_requests queue
-│   │   └── reports.tsx           # reports moderation queue
+│   │   ├── reports.tsx           # reports moderation queue
+│   │   └── conversations/[id].tsx # Admin-only chat viewer (deep-linked from reports)
 │   ├── activity/[id].tsx         # Public activity detail (outside tabs)
 │   ├── user/[id].tsx
 │   ├── plans/                    # paywall / referral / redeem
@@ -78,8 +79,10 @@ insuite/
 │   ├── blocks_and_reports.sql    # Apple 1.2 abuse handling
 │   ├── admin_role.sql            # profile.is_admin + hotels/hotel_requests admin RLS
 │   ├── admin_reports.sql         # reports admin RLS
+│   ├── admin_moderation.sql      # admin SELECT messages/conversations + DELETE activities/messages + UPDATE profiles
 │   ├── admin_role_verify.sql     # RLS smoke test (7 invariants)
 │   ├── admin_reports_verify.sql  # RLS smoke test (4 invariants)
+│   ├── admin_moderation_verify.sql # RLS smoke test (6 invariants)
 │   ├── seed.sql                  # 12-hotel base catalog
 │   ├── hotels_expansion.sql      # Luxury indies (~100)
 │   ├── hotels_chains.sql         # Chain luxury+upscale (~250)
@@ -295,7 +298,7 @@ export const colors = {
 Lives at `/admin/*` — top-level routes (not inside the `(app)/` tabs group) reached via Profile → "Admin" row. The row only renders when `profile.is_admin = true`, and `AdminGate` (in `components/admin/`) bounces non-admins back to `/profile` if they deep-link.
 
 **Bootstrap** (one-time, per admin user):
-1. Apply `supabase/admin_role.sql` + `supabase/admin_reports.sql` in the Supabase Dashboard SQL editor.
+1. Apply `supabase/admin_role.sql` + `supabase/admin_reports.sql` + `supabase/admin_moderation.sql` in the Supabase Dashboard SQL editor.
 2. Promote yourself once:
    ```sql
    update profiles set is_admin = true where id = '<your-user-id>';
@@ -307,17 +310,27 @@ Lives at `/admin/*` — top-level routes (not inside the `(app)/` tabs group) re
 - `/admin` — landing with live counts for hotels / pending requests / pending reports.
 - `/admin/hotels` — list + search + city chip filter + sort toggle (A–Z / Newest) + Add / Edit / Delete. Delete is blocked while activities reference the hotel (FK count shown on the edit screen).
 - `/admin/requests` — `hotel_requests` queue. Pending / Approved / Rejected tabs. Approve opens a modal pre-filled with the submitter's input so typos can be cleaned before insert.
-- `/admin/reports` — `reports` moderation queue (Apple 1.2). Pending / Actioned / Dismissed tabs. Target labels deep-link to `/user/[id]` / `/activity/[id]` / `/messages/[id]` for context. The actual remediation (block / cancel / delete) happens on those destination screens; the status flip here is the audit trail.
+- `/admin/reports` — `reports` moderation queue (Apple 1.2). Pending / Actioned / Dismissed tabs. Target labels deep-link to `/user/[id]` / `/activity/[id]` / `/admin/conversations/[id]` for context.
+- `/admin/conversations/[id]` — admin-only chat viewer. Reports of a message route here (not the consumer `/messages/[id]`, which is RLS-scoped to participants and would render "Conversation not found" for an admin who isn't in the chat). Includes both participants in the header, no input bar, long-press a bubble to delete it. The `?reportedMessageId=<id>` query param highlights the flagged message with a gold ring and auto-scrolls to it.
+
+**Moderation actions** (requires `admin_moderation.sql` applied; non-admin callers get a 0-row update / Postgres permission error):
+- `/activity/[id]` — non-host admins see **Cancel activity (admin)** + **Delete activity (admin)** in the `…` menu (alongside the regular Report option). Hosts still get the existing Edit/Cancel/Delete menu unchanged.
+- `/admin/conversations/[id]` — long-press any bubble → **Delete message (admin)**. Single-message takedown without nuking the whole chat.
+- `/user/[id]` — non-self admins see **Clear avatar (admin)** + **Clear bio (admin)** in the `…` menu. Avatar storage row is left orphaned (DB url → null is what the app actually reads); a periodic cleanup of orphaned files is out of scope.
+- After an action, return to `/admin/reports` and flip the report's status to mark it as actioned — that's the audit trail.
 
 **RLS** (the real enforcement — the UI gate is just UX):
 - `supabase/admin_role.sql` — `hotels` admin-only insert/update/delete + `hotel_requests` admin select/update.
 - `supabase/admin_reports.sql` — `reports` admin select/update. No delete policy by design; reports are forever-audit.
+- `supabase/admin_moderation.sql` — admin SELECT on `messages` + `conversations` (so the chat viewer can load), admin DELETE on `messages` + `activities`, admin UPDATE on `profiles` (column-agnostic; the `is_admin` trigger from `admin_role.sql` still blocks self-promotion even via the new admin policy).
 - `profiles.is_admin` is service-role-only writable. A column-level revoke alone is a no-op when Supabase grants `authenticated` table-wide UPDATE (the revoke gets shadowed); the actual wall is a `BEFORE UPDATE OF is_admin` trigger that rejects any change unless `current_user` is `postgres` / `service_role`. Found by the verify script — see Notes for Claude Code.
 
 **RLS verification scripts** (run against the live DB after applying migrations):
 - `supabase/admin_role_verify.sql` — 7 invariants on hotels + hotel_requests + the is_admin lock.
 - `supabase/admin_reports_verify.sql` — 4 invariants on the reports queue.
-- Both use `set local role authenticated` + a synthetic non-admin uid. Each writes one PASS/FAIL row into a temp table and returns it in the Results panel (the older RAISE NOTICE pattern is invisible on the current Dashboard — temp table is the workaround).
+- `supabase/admin_moderation_verify.sql` — 6 invariants on messages/conversations/activities/profiles RLS, including a re-check that admin-promote-other still rejects via the trigger.
+- All use `set local role authenticated` + a synthetic non-admin uid. Each writes one PASS/FAIL row into a temp table and returns it in the Results panel (the older RAISE NOTICE pattern is invisible on the current Dashboard — temp table is the workaround).
+- The moderation verify script needs at least one non-admin profile to exist (it uses it as the "victim" target); seed one before running.
 
 ---
 
@@ -362,6 +375,7 @@ When adding tests for Supabase-touching code, keep the network-bound parts in th
 | Admin Hotel — New / Edit | /admin/hotels/new · /admin/hotels/[id] | Edit shows FK-count guard before Delete |
 | Admin Requests | /admin/requests | `hotel_requests` queue with Pending/Approved/Rejected tabs |
 | Admin Reports | /admin/reports | `reports` queue with Pending/Actioned/Dismissed tabs |
+| Admin Chat Viewer | /admin/conversations/[id] | Read-only chat for moderation; long-press bubble to delete |
 
 ---
 

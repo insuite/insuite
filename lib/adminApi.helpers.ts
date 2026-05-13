@@ -102,10 +102,14 @@ export function buildReportTarget(row: ReportTargetSource): ReportTarget {
       c.length > MESSAGE_SNIPPET_LIMIT
         ? c.slice(0, MESSAGE_SNIPPET_LIMIT) + '…'
         : c;
+    // Admin-only chat viewer — the consumer /messages/[id] screen is
+    // RLS-scoped to participants and would render "Conversation not
+    // found" for an admin who isn't in the chat. The reported message
+    // id rides along so the admin screen can highlight / scroll to it.
     return {
       type: 'message',
       label: `"${snippet}"`,
-      href: `/messages/${row.reported_message.conversation_id}`,
+      href: `/admin/conversations/${row.reported_message.conversation_id}?reportedMessageId=${row.reported_message.id}`,
     };
   }
   // The check constraint on reports requires at least one target, but

@@ -30,67 +30,64 @@ Design language: Dark luxury — deep charcoal backgrounds (#0f0e0c), gold accen
 insuite/
 ├── CLAUDE.md
 ├── app/
-│   ├── _layout.tsx               # Root layout, auth gate
-│   ├── (auth)/
-│   │   ├── welcome.tsx           # Welcome + Sign in with Apple
-│   │   └── onboarding/
-│   │       ├── name.tsx          # Step 1: First name
-│   │       ├── languages.tsx     # Step 2: Languages
-│   │       ├── activities.tsx    # Step 3: Activities
-│   │       └── bio.tsx           # Step 4: Bio (optional)
-│   └── (app)/
-│       ├── _layout.tsx           # Tab navigator
-│       ├── discover.tsx          # Discover tab
-│       ├── activities/
-│       │   ├── index.tsx         # My activities list
-│       │   ├── new/
-│       │   │   ├── hotel.tsx     # Step 1: Select hotel
-│       │   │   ├── venue.tsx     # Step 2: Select venue
-│       │   │   ├── datetime.tsx  # Step 3: Date & time
-│       │   │   └── confirm.tsx   # Step 4: Confirm & publish
-│       │   └── [id].tsx          # Activity detail
-│       ├── messages/
-│       │   ├── index.tsx         # Conversations list
-│       │   └── [id].tsx          # Chat thread
-│       └── profile/
-│           ├── index.tsx         # Profile view
-│           └── edit/
-│               ├── index.tsx     # Edit menu
-│               ├── name.tsx
-│               ├── bio.tsx
-│               ├── languages.tsx
-│               ├── activities.tsx
-│               └── vibe.tsx
+│   ├── _layout.tsx               # Root Stack, auth gate, top-level routes
+│   ├── welcome.tsx
+│   ├── onboarding/               # name → languages → activities → bio
+│   ├── (app)/                    # Tabs group (auth-required)
+│   │   ├── _layout.tsx           # Tab navigator: discover / activities / messages / profile
+│   │   ├── discover.tsx
+│   │   ├── activities/           # list + new/ wizard + [id] detail
+│   │   ├── messages/             # list + [id] chat
+│   │   └── profile/              # view + edit/* + blocked
+│   ├── admin/                    # Admin-only — see Admin Tooling
+│   │   ├── _layout.tsx           # Stack
+│   │   ├── index.tsx             # Landing
+│   │   ├── hotels/               # list / new / [id] edit+delete
+│   │   ├── requests.tsx          # hotel_requests queue
+│   │   └── reports.tsx           # reports moderation queue
+│   ├── activity/[id].tsx         # Public activity detail (outside tabs)
+│   ├── user/[id].tsx
+│   ├── plans/                    # paywall / referral / redeem
+│   ├── legal/                    # privacy / terms
+│   └── redeem/[code].tsx
 ├── components/
-│   ├── ui/
-│   │   ├── Button.tsx            # Primary, ghost variants
-│   │   ├── Card.tsx
-│   │   ├── Avatar.tsx
-│   │   ├── Badge.tsx
-│   │   ├── LanguagePicker.tsx
-│   │   ├── VenuePicker.tsx
-│   │   └── MiniCalendar.tsx
-│   ├── activity/
-│   │   ├── ActivityCard.tsx      # Used in Discover feed
-│   │   └── ActivityDetail.tsx
-│   └── messaging/
-│       ├── ChatBubble.tsx
-│       └── MessageInput.tsx
+│   ├── ui/                       # Avatar, Button, Card, ...
+│   ├── activity/                 # ActivityCard, ActivityDetail
+│   ├── messaging/                # ChatBubble, MessageInput
+│   └── admin/                    # AdminGate (client-side gate; RLS is the real wall)
 ├── lib/
-│   ├── supabase.ts               # Supabase client
-│   ├── auth.ts                   # Apple sign-in logic
-│   ├── revenuecat.ts             # Payments
-│   └── notifications.ts          # Push setup
-├── stores/
-│   ├── authStore.ts              # User session
-│   ├── profileStore.ts           # Profile data
-│   └── activityStore.ts          # Activities cache
-├── constants/
-│   ├── colors.ts                 # Design tokens
-│   ├── venues.ts                 # Venue list + icons
-│   └── languages.ts              # Language list + flags
-└── supabase/
-    └── schema.sql                # Full DB schema
+│   ├── supabase.ts               # Client + hand-rolled Database type
+│   ├── auth.ts                   # Apple sign-in
+│   ├── activitiesApi.ts          # Hotels / activities / join requests
+│   ├── adminApi.ts               # Admin CRUD + queues (Supabase-coupled)
+│   ├── adminApi.helpers.ts       # Pure helpers — tested in __tests__/
+│   ├── moderationApi.ts          # Blocks + reports (user-side)
+│   ├── messagesApi.ts            # Conversations + messages
+│   ├── profileApi.ts             # Profile + avatar
+│   ├── passesApi.ts              # Trip pass / referral pass
+│   ├── referralsApi.ts           # Referral codes
+│   ├── accountApi.ts             # Delete account
+│   ├── notifications.ts          # Push setup
+│   ├── iap.ts                    # RevenueCat / expo-iap
+│   └── avatarPicker.ts
+├── stores/                       # Zustand stores: auth, profile, activityDraft, ...
+├── constants/                    # colors, venues, languages, hotels (demo fallback), ...
+├── supabase/                     # Migrations + verification scripts (manual apply)
+│   ├── schema.sql                # Base schema (profiles, hotels, activities, ...)
+│   ├── hotel_requests.sql        # User-submitted hotel suggestions
+│   ├── blocks_and_reports.sql    # Apple 1.2 abuse handling
+│   ├── admin_role.sql            # profile.is_admin + hotels/hotel_requests admin RLS
+│   ├── admin_reports.sql         # reports admin RLS
+│   ├── admin_role_verify.sql     # RLS smoke test (7 invariants)
+│   ├── admin_reports_verify.sql  # RLS smoke test (4 invariants)
+│   ├── seed.sql                  # 12-hotel base catalog
+│   ├── hotels_expansion.sql      # Luxury indies (~100)
+│   ├── hotels_chains.sql         # Chain luxury+upscale (~250)
+│   ├── hotels_grand_hyatt_plus.sql  # Grand Hyatt-tier-and-above (~96)
+│   ├── hotels_new_cities_apac.sql   # Beijing/Macau/KL/Osaka/Hanoi/HCMC/Mumbai (~47)
+│   └── functions/                # Edge functions (e.g. send-push)
+├── __tests__/                    # vitest
+└── vitest.config.ts
 ```
 
 ---
@@ -107,6 +104,7 @@ create table profiles (
   open_to text[] default '{}',       -- venue preferences
   vibe_tags text[] default '{}',
   avatar_url text,
+  is_admin boolean not null default false,  -- unlocks /admin; see Admin Tooling
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -194,6 +192,13 @@ alter table messages enable row level security;
 alter table passes enable row level security;
 alter table referrals enable row level security;
 ```
+
+Additional tables in separate migration files:
+- `hotel_requests` (supabase/hotel_requests.sql) — user-submitted "add this hotel" suggestions
+- `blocks` / `reports` (supabase/blocks_and_reports.sql) — Apple 1.2 compliance
+- Admin RLS policies (supabase/admin_role.sql, supabase/admin_reports.sql) — read more in Admin Tooling
+
+Catalog seeding lives in `supabase/seed.sql` + four expansion files (`hotels_expansion.sql`, `hotels_chains.sql`, `hotels_grand_hyatt_plus.sql`, `hotels_new_cities_apac.sql`). All idempotent — re-run safely; ~547 properties across 33 cities once fully applied.
 
 ---
 
@@ -285,6 +290,50 @@ export const colors = {
 
 ---
 
+## Admin Tooling
+
+Lives at `/admin/*` — top-level routes (not inside the `(app)/` tabs group) reached via Profile → "Admin" row. The row only renders when `profile.is_admin = true`, and `AdminGate` (in `components/admin/`) bounces non-admins back to `/profile` if they deep-link.
+
+**Bootstrap** (one-time, per admin user):
+1. Apply `supabase/admin_role.sql` + `supabase/admin_reports.sql` in the Supabase Dashboard SQL editor.
+2. Promote yourself once:
+   ```sql
+   update profiles set is_admin = true where id = '<your-user-id>';
+   ```
+   (User id is under Authentication → Users in the Dashboard.)
+3. Reload the app — the "Admin" row appears in Profile.
+
+**Sub-screens**:
+- `/admin` — landing with live counts for hotels / pending requests / pending reports.
+- `/admin/hotels` — list + search + city chip filter + sort toggle (A–Z / Newest) + Add / Edit / Delete. Delete is blocked while activities reference the hotel (FK count shown on the edit screen).
+- `/admin/requests` — `hotel_requests` queue. Pending / Approved / Rejected tabs. Approve opens a modal pre-filled with the submitter's input so typos can be cleaned before insert.
+- `/admin/reports` — `reports` moderation queue (Apple 1.2). Pending / Actioned / Dismissed tabs. Target labels deep-link to `/user/[id]` / `/activity/[id]` / `/messages/[id]` for context. The actual remediation (block / cancel / delete) happens on those destination screens; the status flip here is the audit trail.
+
+**RLS** (the real enforcement — the UI gate is just UX):
+- `supabase/admin_role.sql` — `hotels` admin-only insert/update/delete + `hotel_requests` admin select/update.
+- `supabase/admin_reports.sql` — `reports` admin select/update. No delete policy by design; reports are forever-audit.
+- `profiles.is_admin` is service-role-only writable. A column-level revoke alone is a no-op when Supabase grants `authenticated` table-wide UPDATE (the revoke gets shadowed); the actual wall is a `BEFORE UPDATE OF is_admin` trigger that rejects any change unless `current_user` is `postgres` / `service_role`. Found by the verify script — see Notes for Claude Code.
+
+**RLS verification scripts** (run against the live DB after applying migrations):
+- `supabase/admin_role_verify.sql` — 7 invariants on hotels + hotel_requests + the is_admin lock.
+- `supabase/admin_reports_verify.sql` — 4 invariants on the reports queue.
+- Both use `set local role authenticated` + a synthetic non-admin uid. Each writes one PASS/FAIL row into a temp table and returns it in the Results panel (the older RAISE NOTICE pattern is invisible on the current Dashboard — temp table is the workaround).
+
+---
+
+## Testing
+
+```bash
+npm test              # one-shot run
+npm run test:watch    # interactive
+```
+
+Vitest, no jest. Pure-TS only — current scope is `lib/adminApi.helpers.ts` (normalize, validate, format, build report target). Tests live in `__tests__/`.
+
+When adding tests for Supabase-touching code, keep the network-bound parts in the wrapper (`lib/*Api.ts`) and the pure logic in a sibling `*.helpers.ts` file. Tests target the helpers, not the wrapper — avoids mocking the Supabase client.
+
+---
+
 ## Key Screens Summary
 
 | Screen | Route | Notes |
@@ -308,33 +357,47 @@ export const colors = {
 | Plans & Pricing | /plans | Trip Pass + Referral |
 | Referral | /plans/referral | Share code, track referrals |
 | Redeem | /plans/redeem | Enter referral/free code |
+| Admin landing | /admin | Gated by `profile.is_admin` |
+| Admin Hotels | /admin/hotels | Search + sort + city chips + Add/Edit/Delete |
+| Admin Hotel — New / Edit | /admin/hotels/new · /admin/hotels/[id] | Edit shows FK-count guard before Delete |
+| Admin Requests | /admin/requests | `hotel_requests` queue with Pending/Approved/Rejected tabs |
+| Admin Reports | /admin/reports | `reports` queue with Pending/Actioned/Dismissed tabs |
 
 ---
 
 ## Development Priorities (MVP Order)
 
-1. Project scaffold + Supabase setup + Apple Sign-In
-2. Onboarding flow (4 steps)
-3. Activity creation flow (4 steps)
-4. Discover feed
-5. Activity detail + join request
-6. Messaging (Supabase Realtime)
-7. Profile + edit
-8. Paywall + RevenueCat
-9. Referral system
-10. Push notifications
-11. Polish + App Store submission
+All 1–10 are shipped. Item 11 is in progress (App Store reviewer audit landed; admin tooling + RLS smoke tests added to satisfy Guideline 1.2 abuse handling).
+
+1. ✅ Project scaffold + Supabase setup + Apple Sign-In
+2. ✅ Onboarding flow (4 steps)
+3. ✅ Activity creation flow (4 steps)
+4. ✅ Discover feed
+5. ✅ Activity detail + join request
+6. ✅ Messaging (Supabase Realtime)
+7. ✅ Profile + edit
+8. ✅ Paywall + RevenueCat
+9. ✅ Referral system
+10. ✅ Push notifications
+11. 🔵 Polish + App Store submission (in progress)
 
 ---
 
-## Commands to Run First
+## Commands
 
 ```bash
-npx create-expo-app insuite --template blank-typescript
-cd insuite
-npx expo install expo-router expo-apple-authentication expo-notifications zustand @supabase/supabase-js
-npm install react-native-purchases  # RevenueCat
+npm install              # first time / after pulling new deps
+npm start                # Metro / Expo dev server
+npm test                 # run vitest once
+npm run test:watch       # vitest interactive
+npm run lint             # expo lint
 ```
+
+Type check: `npx tsc --noEmit -p tsconfig.json`
+
+Worktree setup (when spinning up a new worktree off main): copy `.env` from the main repo into the worktree, junction `node_modules` (`mklink /J <worktree>/node_modules <main-repo>/node_modules`), then `npm start --clear` on a free port. See user memory `worktree_setup.md`.
+
+Admin bootstrap (one-time per admin user): apply `supabase/admin_role.sql` + `supabase/admin_reports.sql`, then `update profiles set is_admin = true where id = '<your-id>'` in the Dashboard.
 
 ---
 
@@ -347,3 +410,11 @@ npm install react-native-purchases  # RevenueCat
 - All API calls go through lib/supabase.ts — never call Supabase directly in components
 - Keep components small and single-purpose
 - When in doubt about a UI detail, refer to the design tokens above
+- New top-level routes outside the `(app)/` tabs group need a matching `Stack.Screen` in `app/_layout.tsx` and **must not** be registered as a tab in `app/(app)/_layout.tsx` (Expo Router auto-discovers them as hidden tabs otherwise). `/admin` is the reference example.
+- Pure helpers extracted from Supabase-coupled wrappers (e.g. `lib/adminApi.helpers.ts`) live alongside the wrapper. Tests target the helpers — wrappers stay un-tested by design unless you mock the client.
+
+### Gotchas worth remembering
+
+- **Postgres column-level revoke doesn't override table-level grant.** `revoke update (col) on T from authenticated` is a no-op while `authenticated` still has a table-wide UPDATE (which Supabase grants by default). The real wall is a `BEFORE UPDATE OF col` trigger. The `profiles.is_admin` lockdown in `supabase/admin_role.sql` uses this pattern; the verification suite caught the bug.
+- **Supabase Dashboard RAISE NOTICE messages aren't visible on the current UI.** Verification scripts use a temp table + final SELECT so results land in the Results panel.
+- **`supabase/*.sql` files aren't auto-applied** — they have to be pasted into the Dashboard SQL editor. Always idempotent (`where not exists` / `drop policy if exists`). Re-runnable. Check `pg_policies` against the file before assuming a code bug.

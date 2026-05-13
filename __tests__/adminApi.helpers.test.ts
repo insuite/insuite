@@ -134,7 +134,7 @@ describe('buildReportTarget', () => {
     expect(target.label).toBe('pool · 2026-05-13');
   });
 
-  it('message target → quoted snippet + /messages/[conv-id] href', () => {
+  it('message target → quoted snippet + admin chat href with reportedMessageId', () => {
     const target = buildReportTarget({
       ...emptyTargets(),
       reported_message: {
@@ -146,7 +146,7 @@ describe('buildReportTarget', () => {
     expect(target).toEqual({
       type: 'message',
       label: '"are you free for dinner?"',
-      href: '/messages/c_3',
+      href: '/admin/conversations/c_3?reportedMessageId=m_9',
     });
   });
 

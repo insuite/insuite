@@ -29,7 +29,9 @@ import {
   requestToJoin,
   type JoinRequestStatus,
 } from '@/lib/activitiesApi';
+import { adminCancelActivity, adminDeleteActivity } from '@/lib/adminApi';
 import { useAuth } from '@/stores/authStore';
+import { useProfile } from '@/stores/profileStore';
 
 type LocalSendState = 'idle' | 'sending';
 
@@ -37,6 +39,7 @@ export default function ActivityDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
+  const { isAdmin } = useProfile();
 
   const [activity, setActivity] = useState<PlaceholderActivity | null>(null);
   const [joinedGuests, setJoinedGuests] = useState<PlaceholderGuest[]>([]);
@@ -224,27 +227,105 @@ export default function ActivityDetailScreen() {
     }
   };
 
+  const askAdminCancel = () => {
+    if (!id) return;
+    Alert.alert(
+      'Cancel this activity (admin)?',
+      "Marks the activity cancelled for everyone. The host isn't notified — log it as actioned in /admin/reports.",
+      [
+        { text: 'Keep activity', style: 'cancel' },
+        {
+          text: 'Cancel activity',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await adminCancelActivity(id);
+              await load();
+            } catch (err: any) {
+              Alert.alert('Could not cancel', err?.message ?? 'Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const askAdminDelete = () => {
+    if (!id) return;
+    Alert.alert(
+      'Delete this activity (admin)?',
+      "Permanently removes it along with any messages. The host isn't notified.",
+      [
+        { text: 'Keep', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await adminDeleteActivity(id);
+              router.back();
+            } catch (err: any) {
+              Alert.alert('Could not delete', err?.message ?? 'Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const showGuestMenu = () => {
     if (!id) return;
+    // Build the option list dynamically — admins (when not the host) see
+    // moderation actions in addition to the regular Report option.
+    type MenuItem = {
+      label: string;
+      destructive?: boolean;
+      onPress: () => void;
+    };
+    const items: MenuItem[] = [
+      { label: 'Report activity', destructive: true, onPress: () => setReportOpen(true) },
+    ];
+    if (isAdmin) {
+      if (!isCancelled && !isExpired) {
+        items.push({
+          label: 'Cancel activity (admin)',
+          destructive: true,
+          onPress: askAdminCancel,
+        });
+      }
+      items.push({
+        label: 'Delete activity (admin)',
+        destructive: true,
+        onPress: askAdminDelete,
+      });
+    }
+
     if (Platform.OS === 'ios') {
+      const labels = [...items.map((i) => i.label), 'Cancel'];
       ActionSheetIOS.showActionSheetWithOptions(
         {
-          options: ['Report activity', 'Cancel'],
+          options: labels,
+          // First item is always "Report" (destructive); flagging it covers
+          // the visual emphasis. Admin items below are also styled the same
+          // way by the destructive flag in the Alert path; ActionSheet only
+          // accepts one destructive index, so accept the loss of styling
+          // there for the admin-only options.
           destructiveButtonIndex: 0,
-          cancelButtonIndex: 1,
+          cancelButtonIndex: labels.length - 1,
           userInterfaceStyle: 'dark',
         },
         (idx) => {
-          if (idx === 0) setReportOpen(true);
+          const picked = items[idx];
+          if (picked) picked.onPress();
         },
       );
     } else {
       Alert.alert('Activity', undefined, [
-        {
-          text: 'Report activity',
-          style: 'destructive',
-          onPress: () => setReportOpen(true),
-        },
+        ...items.map((i) => ({
+          text: i.label,
+          style: i.destructive ? ('destructive' as const) : ('default' as const),
+          onPress: i.onPress,
+        })),
         { text: 'Cancel', style: 'cancel' },
       ]);
     }

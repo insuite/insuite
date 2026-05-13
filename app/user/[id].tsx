@@ -21,14 +21,17 @@ import { AvatarLightbox } from '@/components/ui/AvatarLightbox';
 import { colors, radius, spacing, typography } from '@/constants/colors';
 import { languageMap } from '@/constants/languages';
 import { venueMap } from '@/constants/venues';
+import { adminClearUserAvatar, adminClearUserBio } from '@/lib/adminApi';
 import { blockUser, isBlocked, unblockUser } from '@/lib/moderationApi';
 import { getUserProfile, type UserProfileSummary } from '@/lib/profileApi';
 import { useAuth } from '@/stores/authStore';
+import { useProfile } from '@/stores/profileStore';
 
 export default function UserProfileScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
+  const { isAdmin } = useProfile();
   const [profile, setProfile] = useState<UserProfileSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [avatarOpen, setAvatarOpen] = useState(false);
@@ -101,31 +104,124 @@ export default function UserProfileScreen() {
     }
   };
 
+  const askAdminClearAvatar = () => {
+    if (!id || !profile) return;
+    Alert.alert(
+      `Clear ${profile.firstName}'s avatar (admin)?`,
+      "Removes the photo from their profile. They'll need to set a new one. Useful when the avatar itself was reported.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear avatar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await adminClearUserAvatar(id);
+              setProfile((prev) => (prev ? { ...prev, avatarUri: null } : prev));
+            } catch (err: any) {
+              Alert.alert(
+                'Could not clear',
+                err?.message ?? 'Please try again.',
+              );
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const askAdminClearBio = () => {
+    if (!id || !profile) return;
+    if (profile.bio.length === 0) {
+      Alert.alert('Bio is already empty.');
+      return;
+    }
+    Alert.alert(
+      `Clear ${profile.firstName}'s bio (admin)?`,
+      'Removes the bio text from their profile.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear bio',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await adminClearUserBio(id);
+              setProfile((prev) => (prev ? { ...prev, bio: '' } : prev));
+            } catch (err: any) {
+              Alert.alert(
+                'Could not clear',
+                err?.message ?? 'Please try again.',
+              );
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const showMenu = () => {
     if (isOwnProfile || !profile) return;
     const blockLabel = blocked ? `Unblock ${profile.firstName}` : `Block ${profile.firstName}`;
     const reportLabel = `Report ${profile.firstName}`;
+
+    type MenuItem = {
+      label: string;
+      destructive?: boolean;
+      onPress: () => void;
+    };
+    const items: MenuItem[] = [
+      { label: reportLabel, onPress: () => setReportOpen(true) },
+      {
+        label: blockLabel,
+        destructive: !blocked,
+        onPress: blocked ? onUnblock : onBlock,
+      },
+    ];
+    if (isAdmin) {
+      items.push({
+        label: 'Clear avatar (admin)',
+        destructive: true,
+        onPress: askAdminClearAvatar,
+      });
+      items.push({
+        label: 'Clear bio (admin)',
+        destructive: true,
+        onPress: askAdminClearBio,
+      });
+    }
+
     if (Platform.OS === 'ios') {
+      const labels = [...items.map((i) => i.label), 'Cancel'];
+      // ActionSheet only supports a single destructive index; use the
+      // Block row when not yet blocked, otherwise the first admin item
+      // if any. Best-effort visual emphasis.
+      const blockIdx = 1;
+      const firstAdminIdx = isAdmin ? 2 : -1;
+      const destructiveIdx = !blocked
+        ? blockIdx
+        : firstAdminIdx >= 0
+          ? firstAdminIdx
+          : undefined;
       ActionSheetIOS.showActionSheetWithOptions(
         {
-          options: [reportLabel, blockLabel, 'Cancel'],
-          destructiveButtonIndex: blocked ? undefined : 1,
-          cancelButtonIndex: 2,
+          options: labels,
+          destructiveButtonIndex: destructiveIdx,
+          cancelButtonIndex: labels.length - 1,
           userInterfaceStyle: 'dark',
         },
         (idx) => {
-          if (idx === 0) setReportOpen(true);
-          else if (idx === 1) (blocked ? onUnblock() : onBlock());
+          const picked = items[idx];
+          if (picked) picked.onPress();
         },
       );
     } else {
       Alert.alert('Manage', undefined, [
-        { text: reportLabel, onPress: () => setReportOpen(true) },
-        {
-          text: blockLabel,
-          style: blocked ? 'default' : 'destructive',
-          onPress: blocked ? onUnblock : onBlock,
-        },
+        ...items.map((i) => ({
+          text: i.label,
+          style: i.destructive ? ('destructive' as const) : ('default' as const),
+          onPress: i.onPress,
+        })),
         { text: 'Cancel', style: 'cancel' },
       ]);
     }

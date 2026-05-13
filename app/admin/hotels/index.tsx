@@ -19,11 +19,14 @@ import { listHotelsForAdmin, type AdminHotel } from '@/lib/adminApi';
 
 import { AdminGate } from '@/components/admin/AdminGate';
 
+type SortKey = 'city' | 'recent';
+
 export default function AdminHotelsList() {
   const router = useRouter();
   const [hotels, setHotels] = useState<AdminHotel[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<SortKey>('city');
 
   useFocusEffect(
     useCallback(() => {
@@ -45,14 +48,23 @@ export default function AdminHotelsList() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return hotels;
-    return hotels.filter(
-      (h) =>
-        h.name.toLowerCase().includes(q) ||
-        h.city.toLowerCase().includes(q) ||
-        h.country.toLowerCase().includes(q),
-    );
-  }, [hotels, query]);
+    const base = !q
+      ? hotels
+      : hotels.filter(
+          (h) =>
+            h.name.toLowerCase().includes(q) ||
+            h.city.toLowerCase().includes(q) ||
+            h.country.toLowerCase().includes(q),
+        );
+    if (sort === 'recent') {
+      // createdAt desc — newest first. Slice() so we don't mutate hotels.
+      return [...base].sort((a, b) =>
+        a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0,
+      );
+    }
+    // 'city' is the natural order from the API (city then name asc).
+    return base;
+  }, [hotels, query, sort]);
 
   // Admin chip row — unlike the user-facing picker, no PINNED / EXCLUDED
   // curation since the admin needs to see the full catalog distribution.
@@ -170,10 +182,33 @@ export default function AdminHotelsList() {
             onScrollBeginDrag={Keyboard.dismiss}
             contentContainerStyle={styles.list}
             ListHeaderComponent={
-              <Text style={styles.countLine}>
-                {filtered.length} of {hotels.length}
-                {query ? ` matching "${query}"` : ''}
-              </Text>
+              <View style={styles.headerRow}>
+                <Text style={styles.countLine}>
+                  {filtered.length} of {hotels.length}
+                  {query ? ` matching "${query}"` : ''}
+                </Text>
+                <View style={styles.sortPills}>
+                  {(['city', 'recent'] as const).map((s) => (
+                    <Pressable
+                      key={s}
+                      onPress={() => setSort(s)}
+                      style={[
+                        styles.sortPill,
+                        sort === s && styles.sortPillActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.sortPillText,
+                          sort === s && styles.sortPillTextActive,
+                        ]}
+                      >
+                        {s === 'city' ? 'A–Z' : 'Newest'}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
             }
             renderItem={({ item }) => (
               <Pressable
@@ -189,6 +224,9 @@ export default function AdminHotelsList() {
                   </Text>
                   <Text style={styles.rowSub}>
                     {item.city} · {item.country}
+                    {sort === 'recent'
+                      ? ` · added ${new Date(item.createdAt).toLocaleDateString()}`
+                      : ''}
                   </Text>
                 </View>
                 <Ionicons
@@ -273,11 +311,42 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.xxl,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
+  },
   countLine: {
     ...typography.tiny,
     color: colors.text.faint,
     letterSpacing: 1.5,
-    marginBottom: spacing.sm,
+    flex: 1,
+  },
+  sortPills: {
+    flexDirection: 'row',
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border.subtle,
+    overflow: 'hidden',
+  },
+  sortPill: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    backgroundColor: 'transparent',
+  },
+  sortPillActive: {
+    backgroundColor: colors.border.active,
+  },
+  sortPillText: {
+    ...typography.tiny,
+    color: colors.text.muted,
+    letterSpacing: 1,
+  },
+  sortPillTextActive: {
+    color: colors.text.primary,
+    fontWeight: '500',
   },
   row: {
     flexDirection: 'row',

@@ -230,28 +230,42 @@ export interface AdminHotel {
   name: string;
   city: string;
   country: string;
+  createdAt: string;
 }
 
 export async function listHotelsForAdmin(): Promise<AdminHotel[]> {
   if (!isSupabaseConfigured || !supabase) return [];
   const { data, error } = await supabase
     .from('hotels')
-    .select('id, name, city, country')
+    .select('id, name, city, country, created_at')
     .order('city')
     .order('name');
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    city: row.city,
+    country: row.country,
+    createdAt: row.created_at,
+  }));
 }
 
 export async function getHotelById(id: string): Promise<AdminHotel | null> {
   if (!isSupabaseConfigured || !supabase) return null;
   const { data, error } = await supabase
     .from('hotels')
-    .select('id, name, city, country')
+    .select('id, name, city, country, created_at')
     .eq('id', id)
     .maybeSingle();
   if (error) throw error;
-  return data;
+  if (!data) return null;
+  return {
+    id: data.id,
+    name: data.name,
+    city: data.city,
+    country: data.country,
+    createdAt: data.created_at,
+  };
 }
 
 // =====================================================

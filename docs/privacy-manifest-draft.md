@@ -4,6 +4,20 @@ Apple requires `PrivacyInfo.xcprivacy` on every new submission since May 1, 2024
 
 The Expo team auto-generates a baseline manifest during prebuild based on the `expo-modules` you have installed. That covers most of the third-party side. **This file documents what we add on top for app-specific declarations** — namely the data types we collect on behalf of our backend (Supabase), and a sanity audit of the Required Reason APIs that Apple watches for.
 
+## Status (May 17, 2026)
+
+**Not yet landed in code.** Hit a Windows-host constraint trying `npx expo prebuild --platform ios`:
+
+> ⚠ Skipping generating the iOS native project files. Run `npx expo prebuild` again from macOS or Linux to generate the iOS project.
+> CommandError: At least one platform must be enabled when syncing
+
+Expo's prebuild flatly refuses to generate the iOS scaffold from a Windows host — not a flag, not a warning, a hard refusal. Two paths forward when we're ready to land:
+
+1. **File-based** (what this doc is currently written for): drop the Section 5 XML into `ios/InSuite2/PrivacyInfo.xcprivacy` after running `expo prebuild --platform ios` from macOS, Linux, or WSL2. Commit that single file (the rest of `ios/` stays gitignored under the Expo continuous-native flow).
+2. **Config-based** (newer, Expo SDK 50+): translate Sections 1–3 into `expo.ios.privacyManifests` in `app.json`. Expo bakes the manifest into the right file at build time — no need to ever touch `ios/InSuite2/` by hand, works from any host (Windows included). EAS Build picks it up automatically. Probably the better long-term path for us; revisit when we pick a build environment.
+
+Either way, Sections 1–4 (the decisions) stay valid — they describe what we collect and why, independent of how the file gets generated. Only Section 5 (the literal XML) is superseded if we go config-based.
+
 ---
 
 ## Section 1 — Tracking

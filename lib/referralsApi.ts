@@ -1,7 +1,8 @@
 import { isSupabaseConfigured, supabase } from './supabase';
 
-export interface RedeemSuccess {
+export interface ReferralRedeemSuccess {
   ok: true;
+  kind: 'referral';
   referrerName: string;
   /**
    * True when the redeemer's 7-day pass has been granted now (profile already
@@ -10,6 +11,21 @@ export interface RedeemSuccess {
    */
   passGranted: boolean;
 }
+
+export interface TesterRedeemSuccess {
+  ok: true;
+  kind: 'tester';
+  /** ISO timestamp the granted tester pass expires at. */
+  expiresAt: string;
+  /**
+   * True when the caller already had an active tester pass at the time of
+   * redemption — no new row was inserted; we just surface the existing one
+   * so the same code on a second device doesn't stack passes.
+   */
+  alreadyActive: boolean;
+}
+
+export type RedeemSuccess = ReferralRedeemSuccess | TesterRedeemSuccess;
 
 export interface RedeemFailure {
   ok: false;
@@ -26,31 +42,55 @@ export interface MyReferral {
 }
 
 /**
- * Redeem a referral code as the current user. Calls a security-definer RPC
- * which atomically: validates the code, inserts a referrals row, and gives the
- * caller a 7-day pass. The referrer's pass is granted later via DB trigger
- * when the redeemer posts their first activity.
+ * Redeem a code as the current user.
+ *
+ * Calls the server-side `claim_code` RPC which dispatches: if the input
+ * matches the hard-coded internal tester string from
+ * supabase/tester_code.sql, the caller gets a 90-day tester pass; otherwise
+ * the call falls through to the existing referral logic (insert a referral
+ * row + grant the redeemer a 7-day pass; the referrer is paid later when
+ * the redeemer posts their first activity).
+ *
+ * The discriminated union on the success result lets the UI render
+ * different copy for tester vs referral redemptions.
  */
-export async function redeemReferralCode(code: string): Promise<RedeemResult> {
+export async function redeemCode(code: string): Promise<RedeemResult> {
   if (!isSupabaseConfigured || !supabase) {
     return { ok: false, error: 'Supabase not configured.' };
   }
-  const { data, error } = await supabase.rpc('claim_referral', {
-    p_code: code,
-  });
+  const { data, error } = await supabase.rpc('claim_code', { p_code: code });
   if (error) {
     return { ok: false, error: error.message };
   }
-  // RPC returns json: { ok, error?, referrer_name?, pass_granted? }
   const payload = data as
-    | { ok: true; referrer_name: string; pass_granted?: boolean }
+    | {
+        ok: true;
+        kind: 'referral';
+        referrer_name: string;
+        pass_granted?: boolean;
+      }
+    | {
+        ok: true;
+        kind: 'tester';
+        expires_at: string;
+        already_active: boolean;
+      }
     | { ok: false; error: string };
 
   if (!payload.ok) {
     return { ok: false, error: payload.error };
   }
+  if (payload.kind === 'tester') {
+    return {
+      ok: true,
+      kind: 'tester',
+      expiresAt: payload.expires_at,
+      alreadyActive: payload.already_active,
+    };
+  }
   return {
     ok: true,
+    kind: 'referral',
     referrerName: payload.referrer_name,
     passGranted: payload.pass_granted === true,
   };

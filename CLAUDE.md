@@ -80,6 +80,7 @@ insuite/
 │   ├── admin_role.sql            # profile.is_admin + hotels/hotel_requests admin RLS
 │   ├── admin_reports.sql         # reports admin RLS
 │   ├── admin_moderation.sql      # admin SELECT messages/conversations + DELETE activities/messages + UPDATE profiles
+│   ├── tester_code.sql           # claim_code RPC: dispatches referral vs internal tester (90-day pass)
 │   ├── admin_role_verify.sql     # RLS smoke test (7 invariants)
 │   ├── admin_reports_verify.sql  # RLS smoke test (4 invariants)
 │   ├── admin_moderation_verify.sql # RLS smoke test (6 invariants)
@@ -283,6 +284,7 @@ export const colors = {
 - **Free:** Browse & join activities, message matched guests, first activity post free
 - **Trip Pass:** $2.99 one-time, 14 days, unlimited posts, post before check-in, priority in Discover
 - **Referral pass:** 7 days free, earned when referred user posts their first activity
+- **Tester pass (internal):** 90 days, granted by redeeming the backstage code in `supabase/tester_code.sql` on `/plans/redeem`. Pass row type `tester_90`. Stored in the same `passes` table as the paid passes — visible to the user in their plan UI as just another active pass; no public flag exposes "this is a tester".
 - Paywall shown when user tries to post a second activity without active pass
 
 ### Referral System
@@ -290,6 +292,7 @@ export const colors = {
 - Referral tracked when new user enters code during onboarding or in Redeem screen
 - Reward triggered when referred user posts their first activity
 - Reward = 7-day free pass credited to referrer automatically
+- Both referral and tester codes go through the same `/plans/redeem` UI; the `claim_code` RPC in `supabase/tester_code.sql` dispatches server-side (tester fast-path → claim_referral fallthrough), so the user just types whatever string they have.
 
 ---
 

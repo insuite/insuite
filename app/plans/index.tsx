@@ -16,6 +16,7 @@ import { colors, radius, spacing, typography } from '@/constants/colors';
 import {
   buyPass,
   fetchPassProducts,
+  iapAvailable,
   PASS_DURATION_DAYS,
   PASS_TYPE_FOR_DB,
   restorePasses,
@@ -189,22 +190,39 @@ export default function PlansScreen() {
               <Perk text="Pause or resume anytime" />
             </View>
 
-            <Text style={styles.sectionLabel}>CHOOSE YOUR PASS</Text>
-            <View style={styles.plansList}>
-              {PLANS.map((plan) => (
-                <PlanCard
-                  key={plan.id}
-                  plan={plan}
-                  price={prices[plan.id] ?? plan.fallbackPrice}
-                  isPurchasing={purchasing === plan.id}
-                  onPress={() => onBuy(plan)}
-                />
-              ))}
-            </View>
+            {iapAvailable ? (
+              <>
+                <Text style={styles.sectionLabel}>CHOOSE YOUR PASS</Text>
+                <View style={styles.plansList}>
+                  {PLANS.map((plan) => (
+                    <PlanCard
+                      key={plan.id}
+                      plan={plan}
+                      price={prices[plan.id] ?? plan.fallbackPrice}
+                      isPurchasing={purchasing === plan.id}
+                      onPress={() => onBuy(plan)}
+                    />
+                  ))}
+                </View>
 
-            <Text style={styles.disclaimer}>
-              One-time purchase via Apple · Automatically expires · No auto-renewal
-            </Text>
+                <Text style={styles.disclaimer}>
+                  One-time purchase via Apple · Automatically expires · No auto-renewal
+                </Text>
+              </>
+            ) : (
+              <View style={styles.iapUnavailableCard}>
+                <Ionicons
+                  name="construct-outline"
+                  size={18}
+                  color={colors.text.muted}
+                />
+                <Text style={styles.iapUnavailableText}>
+                  In-app purchases need a native build. Use a referral or
+                  redeem code below, or rebuild with a dev client to test
+                  the paid flow.
+                </Text>
+              </View>
+            )}
           </>
         )}
 
@@ -616,5 +634,22 @@ const styles = StyleSheet.create({
     ...typography.small,
     color: colors.text.muted,
     textDecorationLine: 'underline',
+  },
+  iapUnavailableCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    padding: spacing.md,
+    marginTop: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border.subtle,
+    backgroundColor: colors.bg.secondary,
+  },
+  iapUnavailableText: {
+    ...typography.small,
+    color: colors.text.muted,
+    flex: 1,
+    lineHeight: 18,
   },
 });

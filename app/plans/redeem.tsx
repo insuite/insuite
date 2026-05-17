@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, radius, spacing, typography } from '@/constants/colors';
-import { redeemReferralCode } from '@/lib/referralsApi';
+import { redeemCode } from '@/lib/referralsApi';
 
 type Status = 'idle' | 'checking' | 'success' | 'error';
 
@@ -38,13 +38,26 @@ export default function RedeemScreen() {
     if (trimmed.length === 0) return;
     setStatus('checking');
     setMessage(null);
-    const result = await redeemReferralCode(trimmed);
+    const result = await redeemCode(trimmed);
     if (!result.ok) {
       setStatus('error');
       setMessage(result.error);
       return;
     }
     setStatus('success');
+    if (result.kind === 'tester') {
+      const expiry = new Date(result.expiresAt).toLocaleDateString('en-US', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+      setMessage(
+        result.alreadyActive
+          ? `Tester pass already active — expires ${expiry}.`
+          : `Tester pass activated. 90 days of unlimited posts until ${expiry}.`,
+      );
+      return;
+    }
     setMessage(
       result.passGranted
         ? `You've earned a 7-day free pass! ${result.referrerName} earns theirs when you post your first activity.`
@@ -83,7 +96,11 @@ export default function RedeemScreen() {
             style={styles.input}
             autoCapitalize="characters"
             autoCorrect={false}
-            maxLength={16}
+            // Referral codes are 6–8 chars (firstname + digit), the internal
+            // tester code in supabase/tester_code.sql is ~22 chars. 32 gives
+            // headroom for future code formats without making the field feel
+            // like a textarea.
+            maxLength={32}
             editable={status !== 'checking' && status !== 'success'}
           />
 

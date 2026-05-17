@@ -2,7 +2,14 @@ import { authStore } from '@/stores/authStore';
 
 import { isSupabaseConfigured, supabase } from './supabase';
 
-export type PassType = 'pass_7' | 'pass_14' | 'pass_30' | 'referral_7' | 'free_7' | 'trip_14';
+export type PassType =
+  | 'pass_7'
+  | 'pass_14'
+  | 'pass_30'
+  | 'referral_7'
+  | 'free_7'
+  | 'trip_14'
+  | 'tester_90'; // 90-day backstage pass granted by tester_code.sql claim_code RPC
 
 export interface Pass {
   id: string;
@@ -19,6 +26,7 @@ const DURATION_DAYS: Record<string, number> = {
   referral_7: 7,
   free_7: 7,
   trip_14: 14,
+  tester_90: 90,
 };
 
 /**

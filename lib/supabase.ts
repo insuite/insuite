@@ -323,6 +323,23 @@ export type Database = {
           | { ok: true; referrer_name: string; pass_granted?: boolean }
           | { ok: false; error: string };
       };
+      claim_code: {
+        Args: { p_code: string };
+        Returns:
+          | {
+              ok: true;
+              kind: 'referral';
+              referrer_name: string;
+              pass_granted?: boolean;
+            }
+          | {
+              ok: true;
+              kind: 'tester';
+              expires_at: string;
+              already_active: boolean;
+            }
+          | { ok: false; error: string };
+      };
     };
   };
 };

@@ -1,22 +1,20 @@
 # Privacy Manifest Draft — `PrivacyInfo.xcprivacy`
 
-Apple requires `PrivacyInfo.xcprivacy` on every new submission since May 1, 2024. The actual file is a plist that lives at `ios/<TargetName>/PrivacyInfo.xcprivacy` in the native iOS project. We don't have an `ios/` scaffold yet (Expo's continuous-native flow hasn't been prebuild'd), so this document holds the decisions and the final XML, ready to drop into place after `npx expo prebuild`.
+Apple requires `PrivacyInfo.xcprivacy` on every new submission since May 1, 2024. The actual file is a plist that lives at `ios/<TargetName>/PrivacyInfo.xcprivacy` in the native iOS project.
 
-The Expo team auto-generates a baseline manifest during prebuild based on the `expo-modules` you have installed. That covers most of the third-party side. **This file documents what we add on top for app-specific declarations** — namely the data types we collect on behalf of our backend (Supabase), and a sanity audit of the Required Reason APIs that Apple watches for.
+The Expo team auto-generates a baseline manifest during prebuild based on the `expo-modules` you have installed (aggregated by CocoaPods at `pod install` time). That covers most of the third-party side. **This file documents what we add on top for app-specific declarations** — namely the data types we collect on behalf of our backend (Supabase), and a sanity audit of the Required Reason APIs that Apple watches for.
 
-## Status (May 17, 2026)
+## Status (May 18, 2026) — Landed via config-based approach
 
-**Not yet landed in code.** Hit a Windows-host constraint trying `npx expo prebuild --platform ios`:
+**Live in code.** Sections 1 + 2 are declared in `app.json` → `expo.ios.privacyManifests`; Expo's config plugin writes them into `ios/INSUITE2/PrivacyInfo.xcprivacy` on every `expo prebuild`, and CocoaPods' Privacy Manifest Aggregation merges in Section 3's API categories from each Expo module. After running `npx expo prebuild --platform ios` the merged file contains all 7 collected data types + 4 API categories + tracking flags.
 
-> ⚠ Skipping generating the iOS native project files. Run `npx expo prebuild` again from macOS or Linux to generate the iOS project.
-> CommandError: At least one platform must be enabled when syncing
+**Path taken: config-based** (Expo SDK 50+ `expo.ios.privacyManifests`) rather than the file-based approach the doc was originally drafted for, because:
 
-Expo's prebuild flatly refuses to generate the iOS scaffold from a Windows host — not a flag, not a warning, a hard refusal. Two paths forward when we're ready to land:
+- `ios/` is gitignored under the CNG (Continuous Native Generation) workflow, so a hand-edited `PrivacyInfo.xcprivacy` would be wiped by the next `expo prebuild --clean`. App.json is the single source of truth that survives regeneration.
+- Works from any host (originally relevant when Julian was on Windows and couldn't `expo prebuild` for iOS — now reference for Windows collaborators).
+- EAS Build picks it up automatically from the same config.
 
-1. **File-based** (what this doc is currently written for): drop the Section 5 XML into `ios/InSuite2/PrivacyInfo.xcprivacy` after running `expo prebuild --platform ios` from macOS, Linux, or WSL2. Commit that single file (the rest of `ios/` stays gitignored under the Expo continuous-native flow).
-2. **Config-based** (newer, Expo SDK 50+): translate Sections 1–3 into `expo.ios.privacyManifests` in `app.json`. Expo bakes the manifest into the right file at build time — no need to ever touch `ios/InSuite2/` by hand, works from any host (Windows included). EAS Build picks it up automatically. Probably the better long-term path for us; revisit when we pick a build environment.
-
-Either way, Sections 1–4 (the decisions) stay valid — they describe what we collect and why, independent of how the file gets generated. Only Section 5 (the literal XML) is superseded if we go config-based.
+Section 5 below (literal XML) is kept as **reference / spec** — the canonical implementation now lives in `app.json`. If you ever need to compare what's actually in the built file against what we intended, that section is the human-readable source of truth.
 
 ---
 
@@ -104,9 +102,9 @@ Action: re-run this audit when bumping any of these, and pin the `expo-iap` revi
 
 ---
 
-## Section 5 — Final XML (drop into `ios/InSuite2/PrivacyInfo.xcprivacy`)
+## Section 5 — Reference XML (matches what Expo generates from `app.json`)
 
-This is the file content to commit once `npx expo prebuild` has scaffolded the `ios/` directory. It encodes Sections 1–3 above.
+Kept as a human-readable spec — the canonical implementation is `expo.ios.privacyManifests` in `app.json`, which Expo translates into this XML at prebuild time. Re-read Section 1's status block before assuming this is the source of truth.
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -252,11 +250,11 @@ This is the file content to commit once `npx expo prebuild` has scaffolded the `
 
 ## Path to landing this
 
-1. Run `npx expo prebuild --platform ios` (one-time scaffold of the `ios/` directory).
-2. Copy the XML from Section 5 into `ios/InSuite2/PrivacyInfo.xcprivacy`.
-3. Open the workspace in Xcode → ensure the file is added to the **InSuite2** target's *Build Phases → Copy Bundle Resources*.
-4. Build for archive. Xcode's **Privacy Report** tool (Product → Privacy Report) renders the manifest tree and flags anything inconsistent.
-5. Cross-reference the rendered report against `docs/app-review-notes.md` — the user-facing description of what we collect must match the manifest's declarations exactly. Update one to match the other before submitting.
+1. ✅ Run `npx expo prebuild --platform ios` (one-time scaffold of the `ios/` directory) — done 2026-05-18.
+2. ✅ Declare Sections 1 + 2 in `app.json` → `expo.ios.privacyManifests`; Expo writes them into `ios/INSUITE2/PrivacyInfo.xcprivacy` automatically. Section 3 API categories come from CocoaPods' aggregation at `pod install` — no manual entry needed.
+3. ✅ `PrivacyInfo.xcprivacy` is auto-registered in the **INSUITE2** target's Copy Bundle Resources by Expo's config plugin.
+4. ⏳ **Remaining before App Store submission**: Build for archive on Mac (paid Apple Developer Program — available). Xcode's **Privacy Report** tool (Organizer → "Generate Privacy Report" on the archive) renders the full manifest tree including all bundled SDK contributions and flags anything inconsistent. (UI-level inspection of `ios/INSUITE2/PrivacyInfo.xcprivacy` in Xcode's plist editor was done 2026-05-18 — 7 data types + 4 API categories all present and correctly typed.)
+5. ✅ Cross-reference against `docs/app-review-notes.md` — done 2026-05-18. The notes now include a "What we collect" section that mirrors all 7 manifest data types in plain English.
 
 ## Things to re-verify before each submission
 

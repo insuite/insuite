@@ -29,6 +29,35 @@ The first sign-in walks you through a short onboarding
 (name → languages → activities you're open to → optional bio).
 Subsequent sign-ins land directly on Discover.
 
+## What we collect
+
+A plain-English summary of every data type declared in the
+embedded `PrivacyInfo.xcprivacy`. All are linked to the
+signed-in user; none are used for tracking.
+
+- **Email address** — from Sign in with Apple. If you chose
+  "Hide my email," we only see Apple's relay address. Used
+  for account authentication.
+- **Name** — first name only, captured during onboarding.
+  Shown on your profile, activity host header, chat header.
+- **Profile photo** — optional avatar, picked from your
+  photo library, stored in Supabase Storage. You can clear
+  it any time from `Profile → Edit`.
+- **User content** — your bio, activity notes, chat
+  messages, vibe tags.
+- **Coarse location** — derived from the hotel you select
+  (not GPS), used to scope Discover to other guests in the
+  same city.
+- **User ID** — internal Supabase user id; not visible in
+  the UI.
+- **Device ID** — Expo push notification token, used solely
+  to deliver push notifications about your own conversations
+  and join requests.
+
+We do not collect precise location, contacts, health or
+financial data, browsing history, audio, or any analytics /
+advertising signals.
+
 ## Reviewing the paid flow without paying
 
 For App Store review only: redeem the internal tester code

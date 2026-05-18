@@ -2,6 +2,7 @@ import 'react-native-url-polyfill/auto';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
 
 import type { VenueKey } from '@/constants/venues';
 
@@ -10,6 +11,18 @@ const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 export const isSupabaseConfigured = !!url && !!anonKey;
 
+// AsyncStorage on web reaches for window.localStorage at import time, which
+// blows up under Expo Router's static SSR pre-render. Fall back to a noop on
+// the server — auth restore runs client-side anyway.
+const ssrSafeStorage =
+  typeof window === 'undefined'
+    ? {
+        getItem: async () => null,
+        setItem: async () => {},
+        removeItem: async () => {},
+      }
+    : AsyncStorage;
+
 /**
  * Supabase client. Will be `null` if env vars are missing — call sites should
  * guard with `isSupabaseConfigured` and fall back to local-only behaviour.
@@ -17,10 +30,13 @@ export const isSupabaseConfigured = !!url && !!anonKey;
 export const supabase: SupabaseClient<Database> | null = isSupabaseConfigured
   ? createClient<Database>(url!, anonKey!, {
       auth: {
-        storage: AsyncStorage,
+        storage: ssrSafeStorage,
         autoRefreshToken: true,
         persistSession: true,
-        detectSessionInUrl: false,
+        // Web uses OAuth redirect for Apple Sign-In — Supabase needs to read
+        // the access/refresh tokens from the URL hash on return. Native uses
+        // the expo-apple-authentication flow, no URL involved.
+        detectSessionInUrl: Platform.OS === 'web',
       },
     })
   : null;

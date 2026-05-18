@@ -33,7 +33,14 @@ export default function WelcomeScreen() {
 
     setLoading(true);
     try {
-      const { appleGivenName, session } = await signInWithApple();
+      const result = await signInWithApple();
+
+      // Web: signInWithApple kicked off a full-page redirect and returned
+      // null — the browser is about to navigate to Apple, then back to "/"
+      // where the auth gate picks up the session via onAuthStateChange.
+      if (!result) return;
+
+      const { appleGivenName, session } = result;
 
       // Synchronously load the profile (don't race with the auth listener) so
       // we know whether to route to Discover or Onboarding.
